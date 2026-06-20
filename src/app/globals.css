@@ -1,0 +1,69 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Phoenix Hub Workspace — Design Tokens (from DESIGN.md)
+   Colors stored as space-separated RGB channels so Tailwind opacity
+   modifiers (e.g. bg-primary/10) work via rgb(var(--x) / <alpha-value>). */
+:root {
+  --surface: 248 249 250;
+  --surface-container-lowest: 255 255 255;
+  --surface-container-low: 243 244 245;
+  --surface-container: 237 238 239;
+  --surface-container-high: 231 232 233;
+  --surface-container-highest: 225 227 228;
+  --on-surface: 25 28 29;
+  --on-surface-variant: 68 71 78;
+  --primary: 3 22 53;
+  --on-primary: 255 255 255;
+  --primary-container: 26 43 75;
+  --secondary: 0 107 95;
+  --on-secondary: 255 255 255;
+  --tertiary: 36 19 0;
+  --error: 186 26 26;
+  --amber: 176 109 0;
+  --coral: 193 75 58;
+  --outline: 117 119 127;
+  --outline-variant: 197 198 207;
+  --font-arabic: "IBM Plex Sans Arabic", "Noto Sans Arabic", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+* { border-color: rgb(var(--outline-variant)); }
+
+html, body {
+  background: rgb(var(--surface));
+  color: rgb(var(--on-surface));
+  font-family: var(--font-arabic);
+  -webkit-font-smoothing: antialiased;
+}
+
+.phoenix-motif {
+  background-image: repeating-linear-gradient(-45deg, rgba(3,22,53,0.02) 0px, rgba(3,22,53,0.02) 1px, transparent 1px, transparent 16px);
+}
+
+@layer components {
+  .card { @apply rounded-card bg-surface-container-lowest border border-outline-variant/60; }
+  .card-pad { @apply p-4 sm:p-5; }
+  .btn { @apply inline-flex items-center justify-center gap-2 rounded-card px-4 py-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:opacity-50 disabled:pointer-events-none; }
+  .btn-primary { @apply btn bg-primary text-on-primary hover:bg-primary-container; }
+  .btn-secondary { @apply btn bg-secondary text-on-secondary hover:opacity-90; }
+  .btn-ghost { @apply btn bg-transparent text-on-surface hover:bg-surface-container; }
+  .btn-outline { @apply btn border border-outline-variant bg-surface-container-lowest text-on-surface hover:bg-surface-container; }
+  .btn-danger { @apply btn bg-error text-white hover:opacity-90; }
+  .input { @apply w-full rounded-card border border-outline-variant bg-surface-container-lowest px-3.5 py-2.5 text-sm text-on-surface placeholder:text-on-surface-variant/60 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20; }
+  .label { @apply mb-1.5 block text-sm font-medium text-on-surface; }
+  .badge { @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 font-mono text-[11px] font-medium leading-none; }
+  .stat-num { @apply font-mono text-2xl font-semibold text-on-surface; }
+  .nav-link { @apply flex items-center gap-3 rounded-card px-3 py-2.5 text-sm text-on-surface-variant transition-colors hover:bg-surface-container hover:text-on-surface; }
+  .nav-link-active { @apply bg-primary text-on-primary; }
+  .meta { @apply font-mono text-[11px] uppercase tracking-wide text-on-surface-variant; }
+}
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: rgb(var(--outline-variant)); border-radius: 999px; }
+::-webkit-scrollbar-track { background: transparent; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}

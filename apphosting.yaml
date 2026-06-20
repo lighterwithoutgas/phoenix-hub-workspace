@@ -1,0 +1,20 @@
+# Firebase App Hosting config for the Next.js app.
+# Data/auth are Mongo-backed. Add MONGODB_URI as a secret/runtime variable
+# in the Firebase Console App Hosting backend settings.
+runConfig:
+  minInstances: 0
+  maxInstances: 5
+  concurrency: 80
+  cpu: 1
+  memoryMiB: 512
+
+env:
+  - variable: NEXT_PUBLIC_USE_MOCK_DATA
+    value: "false"
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: MONGODB_DB
+    value: "phoenix_hub"
+    availability:
+      - RUNTIME

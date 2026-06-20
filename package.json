@@ -1,0 +1,40 @@
+{
+  "name": "phoenix-hub-workspace",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "test": "tsx tests/logic.test.ts",
+    "seed:mongo": "tsx scripts/seed-mongo.ts",
+    "reset:mongo:official": "tsx scripts/reset-mongo-official.ts"
+  },
+  "dependencies": {
+    "@hookform/resolvers": "^3.10.0",
+    "clsx": "^2.1.1",
+    "date-fns": "^3.6.0",
+    "lucide-react": "^0.460.0",
+    "mongodb": "^7.3.0",
+    "next": "14.2.35",
+    "nodemailer": "^9.0.1",
+    "react": "^18",
+    "react-dom": "^18",
+    "react-hook-form": "^7.79.0",
+    "recharts": "^2.15.4",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/nodemailer": "^8.0.1",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "eslint": "^8",
+    "eslint-config-next": "14.2.35",
+    "postcss": "^8",
+    "tailwindcss": "^3.4.1",
+    "tsx": "^4.20.5",
+    "typescript": "^5"
+  }
+}

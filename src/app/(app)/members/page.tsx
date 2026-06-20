@@ -157,9 +157,11 @@ export default function MembersPage() {
           teams={data.teams}
           onClose={() => setShowInvite(false)}
           onInvite={(input) => {
-            inviteMember(input);
+            const invitation = inviteMember(input);
+            if (!invitation) return false;
             setSent(input.email);
             setShowInvite(false);
+            return true;
           }}
         />
       )}
@@ -174,8 +176,9 @@ function InviteDialog({
 }: {
   teams: { id: string; name: string }[];
   onClose: () => void;
-  onInvite: (input: InviteInput) => void;
+  onInvite: (input: InviteInput) => boolean;
 }) {
+  const [inviteError, setInviteError] = useState("");
   const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<InviteInput>({
     resolver: zodResolver(inviteSchema),
     defaultValues: { name: "", email: "", role: "member", teamIds: [], asLeader: false },
@@ -198,7 +201,14 @@ function InviteDialog({
             <X className="h-5 w-5" />
           </button>
         </div>
-        <form onSubmit={handleSubmit(onInvite)} className="mt-3 space-y-3">
+        <form
+          onSubmit={handleSubmit((input) => {
+            setInviteError("");
+            const sent = onInvite(input);
+            if (!sent) setInviteError("هذا البريد موجود بالفعل. لا يمكن إرسال دعوة أخرى لنفس البريد.");
+          })}
+          className="mt-3 space-y-3"
+        >
           <div>
             <label className="label">الاسم</label>
             <input className="input" {...register("name")} />
@@ -236,6 +246,7 @@ function InviteDialog({
               <ShieldCheck className="h-4 w-4 text-primary" /> تعيينه قائدا للفرق المحددة
             </label>
           )}
+          {inviteError && <p className="rounded-card bg-error/10 px-3 py-2 text-xs text-error">{inviteError}</p>}
           <div className="flex justify-end gap-2 pt-1">
             <button type="submit" className="btn-primary">إرسال الدعوة</button>
             <button type="button" onClick={onClose} className="btn-ghost">إلغاء</button>

@@ -81,11 +81,10 @@ export default function LoginPage() {
               {errors.password && <p className="mt-1 text-xs text-error">{errors.password.message}</p>}
             </div>
 
-            <div className="flex items-center justify-between text-sm">
+            <div className="flex items-center text-sm">
               <label className="flex items-center gap-2 text-on-surface-variant">
                 <input type="checkbox" className="h-4 w-4 rounded accent-[var(--primary)]" {...register("remember")} /> تذكرني
               </label>
-              <button type="button" className="text-secondary hover:underline">نسيت كلمة المرور؟</button>
             </div>
 
             {error && <p className="rounded-card bg-error/10 px-3 py-2 text-xs text-error">{error}</p>}

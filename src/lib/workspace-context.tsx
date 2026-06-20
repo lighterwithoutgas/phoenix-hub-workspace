@@ -377,9 +377,16 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   const inviteMember = useCallback((input: InviteInput): Invitation | null => {
     if (!currentUser || !can(currentUser, "invite_members")) return null;
     const next = structuredClone(data);
+    const email = input.email.toLowerCase().trim();
+    const existingUser = next.users.some((user) => user.email.toLowerCase().trim() === email);
+    const existingInvitation = next.invitations.some(
+      (invitation) => invitation.email.toLowerCase().trim() === email && invitation.status !== "cancelled"
+    );
+    if (existingUser || existingInvitation) return null;
+
     const userId = uid("u");
     const inv: Invitation = {
-      id: uid("inv"), email: input.email, name: input.name, role: input.role,
+      id: uid("inv"), email, name: input.name, role: input.role,
       teamIds: input.teamIds, leaderOfTeamIds: input.asLeader ? input.teamIds : [],
       token: invitationToken(), status: "pending", expiresAt: daysFromNow(7),
       invitedBy: currentUser?.id ?? "system", createdAt: nowIso(),
@@ -389,7 +396,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     next.users = [
       ...next.users,
       {
-        id: userId, name: input.name, email: input.email, role: input.role,
+        id: userId, name: input.name, email, role: input.role,
         teamIds: input.teamIds, leaderOfTeamIds: input.asLeader ? input.teamIds : [],
         accountStatus: "invited", invitationStatus: "pending", createdAt: nowIso(), updatedAt: nowIso(),
       },
@@ -410,7 +417,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
         candidate.id === inv.id ? { ...candidate, status } : candidate
       );
       updated.users = updated.users.map((candidate) =>
-        candidate.email === input.email && candidate.accountStatus === "invited"
+        candidate.email.toLowerCase().trim() === email && candidate.accountStatus === "invited"
           ? { ...candidate, invitationStatus: status, updatedAt: nowIso() }
           : candidate
       );

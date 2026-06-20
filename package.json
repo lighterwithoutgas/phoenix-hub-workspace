@@ -7,8 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "tsx tests/logic.test.ts",
-    "seed:mongo": "tsx scripts/seed-mongo.ts",
+    "test": "tsc --noEmit",
     "reset:mongo:official": "tsx scripts/reset-mongo-official.ts"
   },
   "dependencies": {

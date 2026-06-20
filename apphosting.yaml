@@ -9,11 +9,6 @@ runConfig:
   memoryMiB: 512
 
 env:
-  - variable: NEXT_PUBLIC_USE_MOCK_DATA
-    value: "false"
-    availability:
-      - BUILD
-      - RUNTIME
   - variable: MONGODB_DB
     value: "phoenix_hub"
     availability:

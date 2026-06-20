@@ -9,18 +9,12 @@ import type {
   TaskInput, InviteInput, ExtensionInput,
   TeamInput, ProjectInput, AnnouncementInput,
 } from "./schemas";
-import { loadData, saveData, loadSession, saveSession, resetData } from "./mock/store";
-import { USE_MOCK } from "./repo";
+import { loadSession, saveSession } from "./session";
 import { apiLoadWorkspace, apiLogin, apiPersistWorkspace, apiSendInvitationEmail } from "./api/workspace";
 import { uid, nowIso, daysFromNow, isOverdue } from "./utils";
-import { MockEmailProvider, buildAssignmentEmail } from "./email/provider";
-import { MockPushProvider } from "./push/provider";
 import {
   can, canDeleteTask, canManageAnnouncement, canReviewTask, canSeeAnnouncement, canSeeTask, canWorkOnTask, isElevated,
 } from "./permissions";
-
-const email = new MockEmailProvider();
-const push = new MockPushProvider();
 
 interface Ctx {
   ready: boolean;
@@ -28,7 +22,6 @@ interface Ctx {
   data: WorkspaceData;
   login: (email: string, password?: string) => Promise<User | null>;
   logout: () => void;
-  resetWorkspace: () => void;
   // actions
   createTask: (input: TaskInput) => Task[] | null;
   updateTaskStatus: (taskId: string, status: TaskStatus, extra?: Partial<Task>) => void;
@@ -85,7 +78,7 @@ function invitationToken(): string {
 
 export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   const [data, setData] = useState<WorkspaceData>(() =>
-    typeof window === "undefined" ? ({} as WorkspaceData) : USE_MOCK ? loadData() : EMPTY_WORKSPACE
+    typeof window === "undefined" ? ({} as WorkspaceData) : EMPTY_WORKSPACE
   );
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [ready, setReady] = useState(false);
@@ -120,16 +113,8 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  // hydrate on client - mock (localStorage) or Mongo API
+  // hydrate on client from Mongo API
   useEffect(() => {
-    if (USE_MOCK) {
-      const d = markOverdue(loadData());
-      setData(d);
-      const sid = loadSession();
-      if (sid) setCurrentUser(d.users.find((u) => u.id === sid) ?? null);
-      setReady(true);
-      return;
-    }
     let cancelled = false;
     (async () => {
       if (cancelled) return;
@@ -151,13 +136,9 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
 
   const commit = useCallback((next: WorkspaceData) => {
     setData(() => {
-      if (USE_MOCK) {
-        saveData(next);
-      } else {
-        const actorId = currentUser?.id;
-        if (actorId) {
-          schedulePersist(next, actorId);
-        }
+      const actorId = currentUser?.id;
+      if (actorId) {
+        schedulePersist(next, actorId);
       }
       return next;
     });
@@ -180,26 +161,10 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       deliveryMethods: ["in_app", "push", "email"], read: false, deliveryStatus: "delivered", createdAt: nowIso(),
     }));
     next.notifications = [...fresh, ...next.notifications];
-    recipients.forEach((rid) => {
-      const u = next.users.find((x) => x.id === rid);
-      if (u) {
-        void push.send(rid, title, message);
-        void email.send(buildAssignmentEmail(title, u.email, "-"));
-      }
-    });
     return next;
   }, []);
 
   const login = useCallback(async (mail: string, password?: string): Promise<User | null> => {
-    if (USE_MOCK) {
-      const u = data.users.find((x) => x.email.toLowerCase() === mail.toLowerCase().trim());
-      if (u && u.accountStatus !== "suspended") {
-        setCurrentUser(u);
-        saveSession(u.id);
-        return u;
-      }
-      return null;
-    }
     const u = await apiLogin(mail, password ?? "");
     if (u) {
       setCurrentUser(u);
@@ -208,22 +173,11 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       setData(markOverdue(fresh));
     }
     return u;
-  }, [data]);
-
-  const logout = useCallback(() => {
-    if (USE_MOCK) {
-      setCurrentUser(null);
-      saveSession(null);
-      return;
-    }
-    setCurrentUser(null);
-    saveSession(null);
   }, []);
 
-  const resetWorkspace = useCallback(() => {
-    if (!USE_MOCK) return; // mock-only: server data is managed via the seed script
-    const d = resetData();
-    setData(d);
+  const logout = useCallback(() => {
+    setCurrentUser(null);
+    saveSession(null);
   }, []);
 
   // ---- Task creation, incl. all four assignment types -------------------
@@ -462,9 +416,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       );
       commit(updated);
     };
-    const send = USE_MOCK
-      ? email.send({ to: input.email, subject: "Phoenix Hub - Invite", html: "<div dir=\"rtl\">تمت دعوتك للانضمام إلى مساحة عمل Phoenix Hub.</div>" })
-      : apiSendInvitationEmail(inv, { id: currentUser.id, name: currentUser.name, email: currentUser.email }, currentUser.id);
+    const send = apiSendInvitationEmail(inv, { id: currentUser.id, name: currentUser.name, email: currentUser.email }, currentUser.id);
     void send.then(() => markInvitation("sent")).catch((error) => {
         console.error("Failed to send invitation email", error);
         markInvitation("failed");
@@ -491,9 +443,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     };
 
     setStatus("pending");
-    const send = USE_MOCK
-      ? email.send({ to: invitation.email, subject: "Phoenix Hub - Invite", html: "<div dir=\"rtl\">تمت دعوتك للانضمام إلى مساحة عمل Phoenix Hub.</div>" })
-      : apiSendInvitationEmail(invitation, { id: currentUser.id, name: currentUser.name, email: currentUser.email }, currentUser.id);
+    const send = apiSendInvitationEmail(invitation, { id: currentUser.id, name: currentUser.name, email: currentUser.email }, currentUser.id);
     void send.then(() => setStatus("sent")).catch((error) => {
       console.error("Failed to resend invitation email", error);
       setStatus("failed");
@@ -708,14 +658,14 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   }, [data, currentUser, commit]);
 
   const value = useMemo<Ctx>(() => ({
-    ready, currentUser, data, login, logout, resetWorkspace,
+    ready, currentUser, data, login, logout,
     createTask, updateTaskStatus, updateProgress, toggleChecklist, addComment,
     reportBlocker, submitForReview, reviewTask, requestExtension, reviewExtension,
     inviteMember, resendInvitation, cancelInvitation, markRead, markAllRead,
     createTeam, createProject, createAnnouncement, acknowledgeAnnouncement,
     deleteTask, deleteTeam, deleteProject, deleteAnnouncement, deleteComment,
     setMemberStatus, removeMember,
-  }), [ready, currentUser, data, login, logout, resetWorkspace, createTask, updateTaskStatus, updateProgress, toggleChecklist, addComment, reportBlocker, submitForReview, reviewTask, requestExtension, reviewExtension, inviteMember, resendInvitation, cancelInvitation, markRead, markAllRead, createTeam, createProject, createAnnouncement, acknowledgeAnnouncement, deleteTask, deleteTeam, deleteProject, deleteAnnouncement, deleteComment, setMemberStatus, removeMember]);
+  }), [ready, currentUser, data, login, logout, createTask, updateTaskStatus, updateProgress, toggleChecklist, addComment, reportBlocker, submitForReview, reviewTask, requestExtension, reviewExtension, inviteMember, resendInvitation, cancelInvitation, markRead, markAllRead, createTeam, createProject, createAnnouncement, acknowledgeAnnouncement, deleteTask, deleteTeam, deleteProject, deleteAnnouncement, deleteComment, setMemberStatus, removeMember]);
 
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;
 }

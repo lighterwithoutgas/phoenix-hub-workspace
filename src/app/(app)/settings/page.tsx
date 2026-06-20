@@ -1,17 +1,13 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { RotateCcw, LogOut, ShieldCheck, Bell, Globe } from "lucide-react";
+import { Bell, Globe, LogOut, ShieldCheck } from "lucide-react";
 import { useWorkspace } from "@/lib/workspace-context";
 import { Avatar, LeaderBadge, SectionTitle } from "@/components/ui";
 import { roleAr } from "@/lib/arabic";
 import { getTeam } from "@/lib/selectors";
 
 export default function SettingsPage() {
-  const { currentUser, data, logout, resetWorkspace } = useWorkspace();
-  const router = useRouter();
-  const [confirmReset, setConfirmReset] = useState(false);
+  const { currentUser, data, logout } = useWorkspace();
 
   if (!currentUser) return null;
   const isLeader = currentUser.leaderOfTeamIds.length > 0;
@@ -37,16 +33,27 @@ export default function SettingsPage() {
           </div>
         </div>
         <dl className="mt-4 space-y-2 text-sm">
-          <div className="flex justify-between border-b border-outline-variant/40 pb-2"><dt className="text-on-surface-variant">الدور</dt><dd className="font-medium text-on-surface">{roleAr[currentUser.role]}</dd></div>
-          <div className="flex justify-between border-b border-outline-variant/40 pb-2"><dt className="text-on-surface-variant">الفرق</dt><dd className="font-medium text-on-surface">{teams.join("، ") || "—"}</dd></div>
-          {ledTeams.length > 0 && <div className="flex justify-between border-b border-outline-variant/40 pb-2"><dt className="text-on-surface-variant">يقود</dt><dd className="font-medium text-on-surface">{ledTeams.join("، ")}</dd></div>}
+          <div className="flex justify-between border-b border-outline-variant/40 pb-2">
+            <dt className="text-on-surface-variant">الدور</dt>
+            <dd className="font-medium text-on-surface">{roleAr[currentUser.role]}</dd>
+          </div>
+          <div className="flex justify-between border-b border-outline-variant/40 pb-2">
+            <dt className="text-on-surface-variant">الفرق</dt>
+            <dd className="font-medium text-on-surface">{teams.join("، ") || "-"}</dd>
+          </div>
+          {ledTeams.length > 0 && (
+            <div className="flex justify-between border-b border-outline-variant/40 pb-2">
+              <dt className="text-on-surface-variant">يقود</dt>
+              <dd className="font-medium text-on-surface">{ledTeams.join("، ")}</dd>
+            </div>
+          )}
         </dl>
       </section>
 
       <section className="card card-pad">
         <SectionTitle><span className="flex items-center gap-2"><Bell className="h-4 w-4" /> الإشعارات</span></SectionTitle>
         <div className="space-y-2">
-          {[["إشعارات داخل التطبيق", true], ["البريد الإلكتروني", true], ["الإشعارات الفورية (Push)", false]].map(([label, on]) => (
+          {[["إشعارات داخل التطبيق", true], ["البريد الإلكتروني", true], ["الإشعارات الفورية", false]].map(([label, on]) => (
             <label key={label as string} className="flex items-center justify-between rounded-lg bg-surface-container-low px-3 py-2">
               <span className="text-sm text-on-surface">{label as string}</span>
               <input type="checkbox" defaultChecked={on as boolean} className="h-4 w-4 accent-primary" />
@@ -65,20 +72,9 @@ export default function SettingsPage() {
 
       <section className="card card-pad border-error/30">
         <SectionTitle><span className="flex items-center gap-2 text-error"><ShieldCheck className="h-4 w-4" /> منطقة الحساب</span></SectionTitle>
-        <div className="space-y-2">
-          <button onClick={() => logout()} className="btn-outline w-full justify-center gap-2"><LogOut className="h-4 w-4" /> تسجيل الخروج</button>
-          {!confirmReset ? (
-            <button onClick={() => setConfirmReset(true)} className="btn-ghost w-full justify-center gap-2 text-error"><RotateCcw className="h-4 w-4" /> إعادة تعيين بيانات المساحة التجريبية</button>
-          ) : (
-            <div className="rounded-card border border-error/30 bg-error/5 p-3">
-              <p className="text-sm text-on-surface">سيؤدي هذا إلى استعادة البيانات التجريبية الأصلية وحذف كل التغييرات. متابعة؟</p>
-              <div className="mt-2 flex gap-2">
-                <button onClick={() => { resetWorkspace(); setConfirmReset(false); router.push("/overview"); }} className="btn-danger">نعم، إعادة التعيين</button>
-                <button onClick={() => setConfirmReset(false)} className="btn-ghost">إلغاء</button>
-              </div>
-            </div>
-          )}
-        </div>
+        <button onClick={() => logout()} className="btn-outline w-full justify-center gap-2">
+          <LogOut className="h-4 w-4" /> تسجيل الخروج
+        </button>
       </section>
     </div>
   );

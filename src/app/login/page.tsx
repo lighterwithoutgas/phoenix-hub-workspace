@@ -4,17 +4,9 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { Eye, EyeOff, Flame, Lock, ShieldCheck } from "lucide-react";
 import { loginSchema, type LoginInput } from "@/lib/schemas";
 import { useWorkspace } from "@/lib/workspace-context";
-import { Eye, EyeOff, Flame, Lock, ShieldCheck } from "lucide-react";
-
-const DEMO = [
-  { email: "admin@phoenixhub.org", label: "مدير النظام" },
-  { email: "leader@phoenixhub.org", label: "قائد الفريق — فريق الإعلام" },
-  { email: "member@phoenixhub.org", label: "عضو الفريق — فريق الإعلام" },
-  { email: "owner@phoenixhub.org", label: "مالك المساحة" },
-  { email: "viewer@phoenixhub.org", label: "مشاهد / مدقق" },
-];
 
 export default function LoginPage() {
   const { login } = useWorkspace();
@@ -35,26 +27,14 @@ export default function LoginPage() {
     try {
       const user = await login(values.email, values.password);
       if (user) router.push("/overview");
-      else setError("تعذّر تسجيل الدخول. تأكد من البريد الإلكتروني أو أن الحساب غير معلّق.");
+      else setError("تعذر تسجيل الدخول. تأكد من البريد الإلكتروني أو أن الحساب غير معلق.");
     } catch {
-      setError("تعذّر تسجيل الدخول. تأكد من البريد الإلكتروني وكلمة المرور.");
-    }
-  };
-
-  const quick = async (mail: string) => {
-    setValue("email", mail);
-    setValue("password", "demo1234");
-    try {
-      const user = await login(mail, "demo1234");
-      if (user) router.push("/overview");
-    } catch {
-      setError("هذه الحسابات التجريبية متاحة في الوضع التجريبي فقط.");
+      setError("تعذر تسجيل الدخول. تأكد من البريد الإلكتروني وكلمة المرور.");
     }
   };
 
   return (
     <div className="grid min-h-screen lg:grid-cols-2">
-      {/* Brand panel */}
       <div className="phoenix-motif relative hidden flex-col justify-between bg-primary p-12 text-on-primary lg:flex">
         <div className="flex items-center gap-3">
           <span className="flex h-11 w-11 items-center justify-center rounded-card bg-white/10"><Flame className="h-6 w-6" /></span>
@@ -68,11 +48,10 @@ export default function LoginPage() {
           <p className="mt-4 text-white/70">منصة آمنة ومنظمة لتنسيق العمل بين فرق Phoenix Hub، وإسناد المهام، ومتابعة الإنجاز.</p>
         </div>
         <p className="flex items-center gap-2 text-sm text-white/60">
-          <ShieldCheck className="h-4 w-4" /> وصول مقيّد للأعضاء المصرح لهم فقط
+          <ShieldCheck className="h-4 w-4" /> وصول مقيد للأعضاء المصرح لهم فقط
         </p>
       </div>
 
-      {/* Form panel */}
       <div className="flex items-center justify-center p-6 sm:p-10">
         <div className="w-full max-w-sm">
           <div className="mb-6 flex items-center gap-2.5 lg:hidden">
@@ -88,7 +67,7 @@ export default function LoginPage() {
           <form onSubmit={handleSubmit(onSubmit)} className="mt-5 space-y-4" noValidate>
             <div>
               <label className="label" htmlFor="email">البريد الإلكتروني</label>
-              <input id="email" type="email" dir="ltr" className="input text-left" placeholder="name@phoenixhub.org" {...register("email")} />
+              <input id="email" type="email" dir="ltr" className="input text-left" placeholder="name@example.com" {...register("email")} />
               {errors.email && <p className="mt-1 text-xs text-error">{errors.email.message}</p>}
             </div>
             <div>
@@ -115,19 +94,6 @@ export default function LoginPage() {
               <Lock className="h-4 w-4" /> تسجيل الدخول
             </button>
           </form>
-
-          <div className="mt-6">
-            <p className="meta mb-2">دخول تجريبي سريع</p>
-            <div className="space-y-1.5">
-              {DEMO.map((d) => (
-                <button key={d.email} onClick={() => quick(d.email)} className="flex w-full items-center justify-between rounded-card border border-outline-variant/60 px-3 py-2 text-right text-sm hover:bg-surface-container">
-                  <span className="text-on-surface">{d.label}</span>
-                  <span className="font-mono text-[11px] text-on-surface-variant" dir="ltr">{d.email}</span>
-                </button>
-              ))}
-            </div>
-            <p className="meta mt-2">الوضع التجريبي: أي كلمة مرور غير فارغة مقبولة.</p>
-          </div>
         </div>
       </div>
     </div>

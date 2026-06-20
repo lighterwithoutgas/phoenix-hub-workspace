@@ -1,92 +1,65 @@
 # Phoenix Hub Workspace
 
-Arabic RTL internal workspace for Phoenix Hub: teams, tasks, projects, announcements, notifications, approvals, comments, and role-based permissions.
+Arabic RTL internal workspace for Phoenix Hub: teams, tasks, projects, announcements, notifications, approvals, comments, invitations, and role-based permissions.
 
-Built with Next.js 14, TypeScript, Tailwind CSS, React Hook Form, Zod, Recharts, Lucide, and MongoDB.
+Built with Next.js 14, TypeScript, Tailwind CSS, React Hook Form, Zod, Recharts, Lucide, Nodemailer, and MongoDB.
 
 ## Quick Start
 
+Create `.env.local` with your real MongoDB and email settings:
+
+```env
+MONGODB_URI=mongodb+srv://...
+MONGODB_DB=phoenix_hub
+
+OFFICIAL_OWNER_EMAIL=owner@example.com
+OFFICIAL_OWNER_NAME="Owner Name"
+OFFICIAL_OWNER_PASSWORD=change-this-password
+
+EMAIL_PROVIDER=gmail
+EMAIL_FROM="Phoenix Hub <your-gmail@gmail.com>"
+GMAIL_USER=your-gmail@gmail.com
+GMAIL_APP_PASSWORD=your-google-app-password
+
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+```
+
+Then run:
+
 ```bash
 npm install
+npm run reset:mongo:official
 npm run dev
 ```
 
-Open `http://localhost:3000`.
-
-By default the app runs in mock mode with seeded browser `localStorage` data, so no backend is required for local demos.
+Open `http://localhost:3000` and sign in with `OFFICIAL_OWNER_EMAIL` and `OFFICIAL_OWNER_PASSWORD`.
 
 ## Scripts
 
 ```bash
-npm run dev          # local development
-npm run build        # production build
-npm run start        # serve production build
-npm run lint         # eslint
-npm run test         # domain logic and RBAC checks
-npm run seed:mongo   # seed MongoDB with the demo workspace
+npm run dev                    # local development
+npm run build                  # production build
+npm run start                  # serve production build
+npm run lint                   # eslint
+npm run test                   # TypeScript validation
+npm run reset:mongo:official   # clear MongoDB and create the official owner
 ```
 
-## Demo Accounts
+## Data
 
-Use any non-empty password in mock mode and Mongo demo mode.
-
-| Email | Role |
-| --- | --- |
-| `owner@phoenixhub.org` | owner |
-| `admin@phoenixhub.org` | admin |
-| `leader@phoenixhub.org` | team leader |
-| `member@phoenixhub.org` | member |
-| `viewer@phoenixhub.org` | viewer |
-
-## Data Modes
-
-Mock mode:
-
-```env
-NEXT_PUBLIC_USE_MOCK_DATA=true
-```
-
-Data stays in each browser's `localStorage`. This is best for fast testing and demos.
-
-Mongo mode:
-
-```env
-NEXT_PUBLIC_USE_MOCK_DATA=false
-MONGODB_URI=mongodb+srv://...
-MONGODB_DB=phoenix_hub
-```
-
-Data is stored in MongoDB through Next.js API routes. The Mongo URI is server-side only and is never exposed to the browser.
-
-## Mongo Setup
-
-1. Create a MongoDB Atlas cluster or use a local MongoDB instance.
-2. Copy `.env.example` to `.env.local`.
-3. Set `NEXT_PUBLIC_USE_MOCK_DATA=false`.
-4. Set `MONGODB_URI` and optionally `MONGODB_DB`.
-5. Seed initial data:
-
-```bash
-npm run seed:mongo
-```
-
-6. Run the app:
-
-```bash
-npm run dev
-```
+The app uses MongoDB only. No browser-stored sample workspace is included.
 
 ## Deploy
 
-For Firebase App Hosting, keep `apphosting.yaml`, then add these backend environment variables in the Firebase Console:
+For Vercel, Firebase App Hosting, Render, Railway, or any Node host, add the same environment variables from `.env.local` to the hosting provider.
+
+For production, set:
 
 ```env
-NEXT_PUBLIC_USE_MOCK_DATA=false
-MONGODB_URI=<your MongoDB connection string>
-MONGODB_DB=phoenix_hub
+NEXT_PUBLIC_APP_URL=https://your-real-domain-or-vercel-url
 ```
 
-For Vercel, Render, Railway, or any Node host, add the same environment variables and deploy the Next.js app normally.
+Invite emails use `NEXT_PUBLIC_APP_URL` to generate the accept-invite link.
 
 ## Architecture
 
@@ -94,22 +67,21 @@ For Vercel, Render, Railway, or any Node host, add the same environment variable
 src/
   app/
     api/
-      auth/login/          Mongo-backed login endpoint
-      workspace/           Mongo-backed workspace load/persist endpoint
-    login/                 auth screen
-    (app)/                 authenticated app shell and feature pages
-  components/              UI and feature components
+      auth/login/             Mongo-backed login endpoint
+      invitations/accept/     invitation acceptance and password setup
+      invitations/send/       invitation email sender
+      workspace/              Mongo-backed workspace load/persist endpoint
+    accept-invite/            invited-user password setup
+    login/                    auth screen
+    (app)/                    authenticated app shell and feature pages
+  components/                 UI and feature components
   lib/
-    api/                   browser API client
-    mongo/                 server-only Mongo client and repository
-    mock/                  seed data and localStorage store
-    permissions.ts         RBAC and visibility rules
-    workspace-context.tsx  client state and user actions
-tests/                     domain logic checks
+    api/                      browser API client
+    auth/                     password hashing and verification
+    mongo/                    server-only Mongo client and repository
+    permissions.ts            RBAC and visibility rules
+    session.ts                browser session id storage
+    workspace-context.tsx     client state and user actions
 scripts/
-  seed-mongo.ts            Mongo seed script
+  reset-mongo-official.ts     official workspace reset script
 ```
-
-## Current Auth Note
-
-Mongo mode currently matches the old demo behavior: login is email-based and accepts any non-empty password for active users in the database. Before real public/team deployment, replace `/api/auth/login` with real password hashing or an auth provider, then move mutations to operation-specific server endpoints for stronger server-side enforcement.

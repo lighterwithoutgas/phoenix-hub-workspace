@@ -151,12 +151,6 @@ export async function mongoPersist(next: WorkspaceData, prev?: WorkspaceData): P
   ]);
 }
 
-export async function mongoSeed(seed: WorkspaceData): Promise<void> {
-  const db = await getMongoDb();
-  await Promise.all(Object.values(COLLECTIONS).map((collection) => db.collection(collection).deleteMany({})));
-  await mongoPersist(seed, EMPTY_WORKSPACE);
-}
-
 export async function mongoFindUserByEmail(email: string): Promise<User | null> {
   const db = await getMongoDb();
   const user = await db.collection<User>(COLLECTIONS.users).findOne(

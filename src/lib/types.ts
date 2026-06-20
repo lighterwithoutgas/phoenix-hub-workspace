@@ -3,7 +3,7 @@
 // All identifiers/enums in English; UI labels resolved in lib/arabic.ts
 // ---------------------------------------------------------------------------
 
-// Timestamps are stored as ISO strings in both mock mode and Mongo mode.
+// Timestamps are stored as ISO strings.
 export type Timestamp = string;
 
 export type UserRole = "owner" | "admin" | "team_leader" | "member" | "viewer";

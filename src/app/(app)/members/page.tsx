@@ -13,7 +13,7 @@ import { accountStatusAr, fmtRelative, invitationAr, roleAr } from "@/lib/arabic
 import type { UserRole } from "@/lib/types";
 
 export default function MembersPage() {
-  const { currentUser, data, inviteMember, resendInvitation, setMemberStatus, removeMember, cancelInvitation } = useWorkspace();
+  const { currentUser, data, inviteMember, resendInvitation, setMemberStatus, removeMember, cancelInvitation, updateMemberRole } = useWorkspace();
   const params = useSearchParams();
   const [showInvite, setShowInvite] = useState(false);
   const [sent, setSent] = useState<string | null>(null);
@@ -33,6 +33,7 @@ export default function MembersPage() {
   }
 
   const teamName = (id: string) => data.teams.find((team) => team.id === id)?.name ?? id;
+  const roleOptions: UserRole[] = ["admin", "team_leader", "member", "viewer"];
 
   return (
     <div className="space-y-5">
@@ -71,6 +72,7 @@ export default function MembersPage() {
               {data.users.map((user) => {
                 const isLeader = user.leaderOfTeamIds.length > 0;
                 const invitation = data.invitations.find((item) => item.email === user.email);
+                const canChangeRole = can(currentUser, "manage_members") && user.id !== currentUser.id && user.role !== "owner";
                 return (
                   <tr key={user.id} className="hover:bg-surface-container-low/50">
                     <td className="p-3">
@@ -83,8 +85,21 @@ export default function MembersPage() {
                       </div>
                     </td>
                     <td className="p-3">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-on-surface">{roleAr[user.role]}</span>
+                      <div className="flex items-center gap-2">
+                        {canChangeRole ? (
+                          <select
+                            aria-label="تغيير الدور"
+                            className="input h-9 min-w-36 py-1 text-sm"
+                            value={user.role}
+                            onChange={(event) => updateMemberRole(user.id, event.target.value as UserRole)}
+                          >
+                            {roleOptions.map((item) => (
+                              <option key={item} value={item}>{roleAr[item]}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <span className="text-on-surface">{roleAr[user.role]}</span>
+                        )}
                         {isLeader && <LeaderBadge />}
                       </div>
                     </td>

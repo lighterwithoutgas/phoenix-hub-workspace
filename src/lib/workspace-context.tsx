@@ -36,6 +36,7 @@ interface Ctx {
   inviteMember: (input: InviteInput) => Invitation | null;
   resendInvitation: (invId: string) => void;
   cancelInvitation: (invId: string) => void;
+  updateMemberRole: (userId: string, role: User["role"]) => void;
   markRead: (id: string) => void;
   markAllRead: () => void;
   // create
@@ -467,6 +468,32 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     commit(next);
   }, [data, commit, currentUser]);
 
+  const updateMemberRole = useCallback((userId: string, role: User["role"]) => {
+    if (!currentUser || !can(currentUser, "manage_members")) return;
+    if (role === "owner") return;
+    const next = structuredClone(data);
+    const target = next.users.find((user) => user.id === userId);
+    if (!target || target.id === currentUser.id || target.role === "owner") return;
+
+    const leaderOfTeamIds = role === "team_leader" ? target.leaderOfTeamIds : [];
+    next.users = next.users.map((user) =>
+      user.id === userId ? { ...user, role, leaderOfTeamIds, updatedAt: nowIso() } : user
+    );
+    if (role !== "team_leader") {
+      next.teams = next.teams.map((team) => ({
+        ...team,
+        leaderIds: team.leaderIds.filter((leaderId) => leaderId !== userId),
+        updatedAt: team.leaderIds.includes(userId) ? nowIso() : team.updatedAt,
+      }));
+    }
+    next.invitations = next.invitations.map((invitation) =>
+      invitation.email.toLowerCase().trim() === target.email.toLowerCase().trim() && invitation.status !== "accepted"
+        ? { ...invitation, role, leaderOfTeamIds }
+        : invitation
+    );
+    commit(next);
+  }, [data, commit, currentUser]);
+
   // -- Create --------------------------------------------------------------
   const createTeam = useCallback((input: TeamInput): Team | null => {
     if (!currentUser || !isElevated(currentUser)) return null;
@@ -668,11 +695,11 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     ready, currentUser, data, login, logout,
     createTask, updateTaskStatus, updateProgress, toggleChecklist, addComment,
     reportBlocker, submitForReview, reviewTask, requestExtension, reviewExtension,
-    inviteMember, resendInvitation, cancelInvitation, markRead, markAllRead,
+    inviteMember, resendInvitation, cancelInvitation, updateMemberRole, markRead, markAllRead,
     createTeam, createProject, createAnnouncement, acknowledgeAnnouncement,
     deleteTask, deleteTeam, deleteProject, deleteAnnouncement, deleteComment,
     setMemberStatus, removeMember,
-  }), [ready, currentUser, data, login, logout, createTask, updateTaskStatus, updateProgress, toggleChecklist, addComment, reportBlocker, submitForReview, reviewTask, requestExtension, reviewExtension, inviteMember, resendInvitation, cancelInvitation, markRead, markAllRead, createTeam, createProject, createAnnouncement, acknowledgeAnnouncement, deleteTask, deleteTeam, deleteProject, deleteAnnouncement, deleteComment, setMemberStatus, removeMember]);
+  }), [ready, currentUser, data, login, logout, createTask, updateTaskStatus, updateProgress, toggleChecklist, addComment, reportBlocker, submitForReview, reviewTask, requestExtension, reviewExtension, inviteMember, resendInvitation, cancelInvitation, updateMemberRole, markRead, markAllRead, createTeam, createProject, createAnnouncement, acknowledgeAnnouncement, deleteTask, deleteTeam, deleteProject, deleteAnnouncement, deleteComment, setMemberStatus, removeMember]);
 
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;
 }

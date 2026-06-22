@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Ban, CheckCircle2, Mail, ShieldCheck, Trash2, UserCheck, UserMinus, UserPlus, X } from "lucide-react";
+import { Ban, CheckCircle2, Copy, Mail, ShieldCheck, Trash2, UserCheck, UserMinus, UserPlus, X } from "lucide-react";
 import { useWorkspace } from "@/lib/workspace-context";
 import { can, isElevated } from "@/lib/permissions";
 import { inviteSchema, type InviteInput } from "@/lib/schemas";
@@ -17,6 +17,7 @@ export default function MembersPage() {
   const params = useSearchParams();
   const [showInvite, setShowInvite] = useState(false);
   const [sent, setSent] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
 
   useEffect(() => {
@@ -34,6 +35,12 @@ export default function MembersPage() {
 
   const teamName = (id: string) => data.teams.find((team) => team.id === id)?.name ?? id;
   const roleOptions: UserRole[] = ["admin", "team_leader", "member", "viewer"];
+  const copyInviteLink = async (token?: string) => {
+    if (!token || typeof window === "undefined") return;
+    const url = `${window.location.origin}/accept-invite?token=${encodeURIComponent(token)}`;
+    await navigator.clipboard.writeText(url);
+    setCopied(true);
+  };
 
   return (
     <div className="space-y-5">
@@ -52,6 +59,11 @@ export default function MembersPage() {
       {sent && (
         <div className="card card-pad flex items-center gap-2 border-secondary/40 bg-secondary/5 text-sm text-on-surface">
           <CheckCircle2 className="h-4 w-4 text-secondary" /> تم إنشاء الدعوة وإرسالها إلى <strong dir="ltr">{sent}</strong>.
+        </div>
+      )}
+      {copied && (
+        <div className="card card-pad flex items-center gap-2 border-secondary/40 bg-secondary/5 text-sm text-on-surface">
+          <CheckCircle2 className="h-4 w-4 text-secondary" /> تم نسخ رابط الدعوة. يمكنك إرساله يدويا إذا لم يصل الإيميل.
         </div>
       )}
 
@@ -121,6 +133,11 @@ export default function MembersPage() {
                               <Mail className="h-3.5 w-3.5" /> إعادة الإرسال
                             </button>
                           )}
+                          {invitation && !["accepted", "cancelled"].includes(invitation.status) && (
+                            <button onClick={() => void copyInviteLink(invitation.token)} className="btn-ghost gap-1 px-2 py-1 text-on-surface-variant hover:bg-surface-container">
+                              <Copy className="h-3.5 w-3.5" /> نسخ الرابط
+                            </button>
+                          )}
                           <button onClick={() => cancelInvitation(invitation?.id ?? "")} className="btn-ghost gap-1 px-2 py-1 text-error hover:bg-error/10">
                             <Ban className="h-3.5 w-3.5" /> إلغاء الدعوة
                           </button>
@@ -175,6 +192,7 @@ export default function MembersPage() {
             const invitation = inviteMember(input);
             if (!invitation) return false;
             setSent(input.email);
+            setCopied(false);
             setShowInvite(false);
             return true;
           }}

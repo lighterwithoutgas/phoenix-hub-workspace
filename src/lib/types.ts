@@ -192,6 +192,9 @@ export interface Invitation {
   status: InvitationStatus;
   expiresAt: Timestamp;
   acceptedAt?: Timestamp;
+  emailMessageId?: string;
+  emailLastSentAt?: Timestamp;
+  emailLastError?: string;
   invitedBy: string;
   createdAt: Timestamp;
 }

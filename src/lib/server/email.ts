@@ -7,6 +7,9 @@ export interface EmailContent {
   to: string;
   subject: string;
   html: string;
+  text?: string;
+  bcc?: string;
+  replyTo?: string;
 }
 
 export function escapeHtml(value: string): string {
@@ -51,6 +54,10 @@ export function senderFromEnv(provider = emailProvider()): string {
   }
 
   return configured || "";
+}
+
+export function bccFromEnv(): string | undefined {
+  return process.env.EMAIL_BCC?.trim() || undefined;
 }
 
 async function sendWithResend(message: EmailContent): Promise<{ id?: string }> {

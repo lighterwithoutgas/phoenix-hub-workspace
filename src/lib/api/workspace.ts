@@ -41,7 +41,7 @@ export async function apiSendInvitationEmail(
   invitation: Invitation,
   invitedBy: Pick<User, "id" | "name" | "email">,
   actorId: string
-): Promise<void> {
+): Promise<{ id?: string }> {
   const response = await fetch("/api/invitations/send", {
     method: "POST",
     headers: {
@@ -50,7 +50,7 @@ export async function apiSendInvitationEmail(
     },
     body: JSON.stringify({ invitation, invitedBy }),
   });
-  await readJson<{ ok: true; id?: string }>(response);
+  return readJson<{ ok: true; id?: string }>(response);
 }
 
 export async function apiSendNotificationEmails(

@@ -418,10 +418,18 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       };
     });
     commit(next);
-    const markInvitation = (status: Invitation["status"]) => {
+    const markInvitation = (status: Invitation["status"], details?: { messageId?: string; error?: string }) => {
       const updated = structuredClone(next);
       updated.invitations = updated.invitations.map((candidate) =>
-        candidate.id === inv.id ? { ...candidate, status } : candidate
+        candidate.id === inv.id
+          ? {
+              ...candidate,
+              status,
+              emailMessageId: details?.messageId ?? candidate.emailMessageId,
+              emailLastSentAt: status === "sent" ? nowIso() : candidate.emailLastSentAt,
+              emailLastError: details?.error,
+            }
+          : candidate
       );
       updated.users = updated.users.map((candidate) =>
         candidate.email.toLowerCase().trim() === email && candidate.accountStatus === "invited"
@@ -431,9 +439,9 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       commit(updated);
     };
     const send = apiSendInvitationEmail(inv, { id: currentUser.id, name: currentUser.name, email: currentUser.email }, currentUser.id);
-    void send.then(() => markInvitation("sent")).catch((error) => {
+    void send.then((result) => markInvitation("sent", { messageId: result.id })).catch((error) => {
         console.error("Failed to send invitation email", error);
-        markInvitation("failed");
+        markInvitation("failed", { error: error instanceof Error ? error.message : "Unknown email error" });
       });
     return inv;
   }, [data, currentUser, commit]);
@@ -443,10 +451,18 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     const invitation = data.invitations.find((candidate) => candidate.id === invId);
     if (!invitation || invitation.status === "cancelled" || invitation.status === "accepted") return;
 
-    const setStatus = (status: Invitation["status"]) => {
+    const setStatus = (status: Invitation["status"], details?: { messageId?: string; error?: string }) => {
       const next = structuredClone(data);
       next.invitations = next.invitations.map((candidate) =>
-        candidate.id === invId ? { ...candidate, status } : candidate
+        candidate.id === invId
+          ? {
+              ...candidate,
+              status,
+              emailMessageId: details?.messageId ?? candidate.emailMessageId,
+              emailLastSentAt: status === "sent" ? nowIso() : candidate.emailLastSentAt,
+              emailLastError: details?.error,
+            }
+          : candidate
       );
       next.users = next.users.map((candidate) =>
         candidate.email === invitation.email && candidate.accountStatus === "invited"
@@ -458,9 +474,9 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
 
     setStatus("pending");
     const send = apiSendInvitationEmail(invitation, { id: currentUser.id, name: currentUser.name, email: currentUser.email }, currentUser.id);
-    void send.then(() => setStatus("sent")).catch((error) => {
+    void send.then((result) => setStatus("sent", { messageId: result.id })).catch((error) => {
       console.error("Failed to resend invitation email", error);
-      setStatus("failed");
+      setStatus("failed", { error: error instanceof Error ? error.message : "Unknown email error" });
     });
   }, [data, currentUser, commit]);
 

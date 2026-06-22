@@ -1,4 +1,4 @@
-import type { User, WorkspaceData } from "../types";
+import type { Notification, User, WorkspaceData } from "../types";
 import type { Invitation } from "../types";
 
 async function readJson<T>(response: Response): Promise<T> {
@@ -51,4 +51,20 @@ export async function apiSendInvitationEmail(
     body: JSON.stringify({ invitation, invitedBy }),
   });
   await readJson<{ ok: true; id?: string }>(response);
+}
+
+export async function apiSendNotificationEmails(
+  notifications: Pick<Notification, "recipientId" | "title" | "message" | "taskId" | "type">[],
+  actorId: string
+): Promise<void> {
+  if (!notifications.length) return;
+  const response = await fetch("/api/notifications/send", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-phoenix-user-id": actorId,
+    },
+    body: JSON.stringify({ notifications }),
+  });
+  await readJson<{ ok: boolean; sent: number; failed: number }>(response);
 }

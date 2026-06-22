@@ -10,7 +10,7 @@ import type {
   TeamInput, ProjectInput, AnnouncementInput,
 } from "./schemas";
 import { loadSession, saveSession } from "./session";
-import { apiLoadWorkspace, apiLogin, apiPersistWorkspace, apiSendInvitationEmail } from "./api/workspace";
+import { apiLoadWorkspace, apiLogin, apiPersistWorkspace, apiSendInvitationEmail, apiSendNotificationEmails } from "./api/workspace";
 import { uid, nowIso, daysFromNow, isOverdue } from "./utils";
 import {
   can, canDeleteTask, canManageAnnouncement, canReviewTask, canSeeAnnouncement, canSeeTask, canWorkOnTask, isElevated,
@@ -162,8 +162,14 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       deliveryMethods: ["in_app", "push", "email"], read: false, deliveryStatus: "delivered", createdAt: nowIso(),
     }));
     next.notifications = [...fresh, ...next.notifications];
+    const actorId = currentUser?.id;
+    if (actorId && fresh.length) {
+      void apiSendNotificationEmails(fresh, actorId).catch((error) => {
+        console.error("Failed to send notification emails", error);
+      });
+    }
     return next;
-  }, []);
+  }, [currentUser]);
 
   const login = useCallback(async (mail: string, password?: string): Promise<User | null> => {
     const u = await apiLogin(mail, password ?? "");

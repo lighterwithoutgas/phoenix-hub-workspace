@@ -116,7 +116,7 @@ export default function MembersPage() {
                         <span className="meta">-</span>
                       ) : user.accountStatus === "invited" ? (
                         <div className="flex items-center gap-1">
-                          {invitation?.status === "failed" && (
+                          {invitation && !["accepted", "cancelled"].includes(invitation.status) && (
                             <button onClick={() => resendInvitation(invitation.id)} className="btn-ghost gap-1 px-2 py-1 text-secondary hover:bg-secondary/10">
                               <Mail className="h-3.5 w-3.5" /> إعادة الإرسال
                             </button>

@@ -25,7 +25,7 @@ export default function TaskDetailsPage() {
   const {
     currentUser, data, updateTaskStatus, updateProgress, toggleChecklist,
     addComment, reportBlocker, submitForReview, reviewTask, requestExtension,
-    deleteTask, deleteComment,
+    reviewExtension, deleteTask, deleteComment,
   } = useWorkspace();
 
   const task = data.tasks.find((t) => t.id === id);
@@ -34,6 +34,7 @@ export default function TaskDetailsPage() {
   const [showExt, setShowExt] = useState(false);
   const [showReview, setShowReview] = useState(false);
   const [showComplete, setShowComplete] = useState(false);
+  const [rejectingExtensionId, setRejectingExtensionId] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [localProgress, setLocalProgress] = useState(task?.progress ?? 0);
 
@@ -65,6 +66,7 @@ export default function TaskDetailsPage() {
 
   const canWork = canWorkOnTask(currentUser, task, data.users);
   const canReview = canReviewTask(currentUser, task, data.users);
+  const elevatedAutoApprove = task.approvalRequired && isElevated(currentUser);
   const isTeam = task.assignmentType === "team_shared";
   const team = task.assignedTeamIds[0] ? getTeam(data, task.assignedTeamIds[0]) : undefined;
   const comments = data.comments.filter((c) => c.taskId === task.id);
@@ -281,7 +283,10 @@ export default function TaskDetailsPage() {
                   )}
                   <button onClick={() => setShowExt(true)} className="btn-outline w-full gap-2"><CalendarClock className="h-4 w-4" /> طلب تمديد الموعد</button>
                   {task.approvalRequired ? (
-                    <button onClick={() => setShowComplete(true)} className="btn-primary w-full gap-2"><Send className="h-4 w-4" /> إرسال للمراجعة</button>
+                    <button onClick={() => setShowComplete(true)} className="btn-primary w-full gap-2">
+                      {elevatedAutoApprove ? <CheckCircle2 className="h-4 w-4" /> : <Send className="h-4 w-4" />}
+                      {elevatedAutoApprove ? "اعتماد المهمة" : "إرسال للمراجعة"}
+                    </button>
                   ) : (
                     <button onClick={() => setShowComplete(true)} className="btn-primary w-full gap-2"><CheckCircle2 className="h-4 w-4" /> تحديد كمكتملة</button>
                   )}
@@ -307,6 +312,18 @@ export default function TaskDetailsPage() {
                 <div key={e.id} className="rounded-lg bg-surface-container-low p-2 text-sm">
                   <p className="text-on-surface">الموعد المطلوب: <span className="font-mono" dir="ltr">{fmtDate(e.requestedDueDate)}</span></p>
                   <p className="meta">{e.reason} · {e.status === "pending" ? "بانتظار المراجعة" : e.status === "approved" ? "تمت الموافقة" : "مرفوض"}</p>
+                  {e.notes && <p className="meta mt-1">{e.notes}</p>}
+                  {e.reviewNote && <p className="mt-1 text-xs text-on-surface-variant">ملاحظة القرار: {e.reviewNote}</p>}
+                  {canReview && e.status === "pending" && (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <button onClick={() => reviewExtension(e.id, "approved", "")} className="btn-primary gap-2 px-3 py-1.5 text-xs">
+                        <CheckCircle2 className="h-3.5 w-3.5" /> قبول
+                      </button>
+                      <button onClick={() => setRejectingExtensionId(e.id)} className="btn-danger gap-2 px-3 py-1.5 text-xs">
+                        <AlertTriangle className="h-3.5 w-3.5" /> رفض
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -317,9 +334,18 @@ export default function TaskDetailsPage() {
       {showBlocker && <BlockerDialog onClose={() => setShowBlocker(false)} onSubmit={(b) => { reportBlocker(task.id, b); setShowBlocker(false); }} />}
       {showExt && <ExtensionDialog onClose={() => setShowExt(false)} onSubmit={(d, r, n) => { requestExtension(task.id, { requestedDueDate: d, reason: r, notes: n }); setShowExt(false); }} />}
       {showReview && <ReviewDialog onClose={() => setShowReview(false)} onSubmit={(decision, note) => { reviewTask(task.id, decision, note); setShowReview(false); }} />}
+      {rejectingExtensionId && (
+        <ExtensionRejectDialog
+          onClose={() => setRejectingExtensionId(null)}
+          onSubmit={(note) => {
+            reviewExtension(rejectingExtensionId, "rejected", note);
+            setRejectingExtensionId(null);
+          }}
+        />
+      )}
       {showComplete && (
         <CompleteDialog
-          mode={task.approvalRequired ? "review" : "complete"}
+          mode={task.approvalRequired && !elevatedAutoApprove ? "review" : "complete"}
           proofRequired={task.proofRequired}
           onClose={() => setShowComplete(false)}
           onSubmit={(submittedLinks) => {
@@ -393,6 +419,30 @@ function ExtensionDialog({ onClose, onSubmit }: { onClose: () => void; onSubmit:
       <div><label className="label">ملاحظات إضافية (اختياري)</label><input className="input" value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
       <div className="flex justify-end gap-2 pt-1">
         <button disabled={!date || !reason} onClick={() => onSubmit(date, reason, notes)} className="btn-primary disabled:opacity-50">إرسال الطلب</button>
+        <button onClick={onClose} className="btn-ghost">إلغاء</button>
+      </div>
+    </Modal>
+  );
+}
+
+function ExtensionRejectDialog({ onClose, onSubmit }: { onClose: () => void; onSubmit: (note: string) => void }) {
+  const [note, setNote] = useState("");
+  return (
+    <Modal title="رفض طلب التمديد">
+      <div>
+        <label className="label">سبب الرفض (اختياري)</label>
+        <textarea
+          rows={3}
+          className="input resize-none"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder="اكتب السبب إذا احتجت توضيح القرار..."
+        />
+      </div>
+      <div className="flex justify-end gap-2 pt-1">
+        <button onClick={() => onSubmit(note.trim())} className="btn-danger gap-2">
+          <AlertTriangle className="h-4 w-4" /> رفض الطلب
+        </button>
         <button onClick={onClose} className="btn-ghost">إلغاء</button>
       </div>
     </Modal>

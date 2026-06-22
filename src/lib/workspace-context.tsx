@@ -327,9 +327,24 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
 
   const submitForReview = useCallback((taskId: string, extra?: Partial<Task>) => {
     mutateTask(taskId, (t, next) => {
+      const prev = t.status;
+      if (extra) Object.assign(t, extra);
+      if (currentUser && isElevated(currentUser)) {
+        t.status = "completed";
+        t.progress = 100;
+        t.completedAt = nowIso();
+        t.review = {
+          reviewerId: currentUser.id,
+          decision: "approved",
+          note: "تم اعتماد المهمة مباشرة بواسطة الإدارة.",
+          createdAt: nowIso(),
+        };
+        log(next, taskId, "task_approved", prev, "completed");
+        notify(next, t.assignedUserIds.filter((uid) => uid !== currentUser.id), "approval", "تم اعتماد المهمة", t.title, taskId);
+        return;
+      }
       t.status = "awaiting_review";
       t.progress = 100;
-      if (extra) Object.assign(t, extra);
       log(next, taskId, "task_submitted");
       notify(next, t.reviewerIds.length ? t.reviewerIds : next.users.filter((u) => u.role === "team_leader").map((u) => u.id), "review_requested", "مهمة بانتظار مراجعتك", t.title, taskId);
     }, (t, next) => !!currentUser && canWorkOnTask(currentUser, t, next.users));
@@ -358,7 +373,10 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     next.extensions = [ext, ...next.extensions];
     log(next, taskId, "extension_requested", undefined, input.requestedDueDate);
     const t = next.tasks.find((x) => x.id === taskId);
-    notify(next, t?.reviewerIds ?? [], "extension", "طلب تمديد موعد", input.reason, taskId);
+    const reviewers = t?.reviewerIds.length
+      ? t.reviewerIds
+      : next.users.filter((user) => user.role === "owner" || user.role === "admin").map((user) => user.id);
+    notify(next, reviewers.filter((userId) => userId !== currentUser.id), "extension", "طلب تمديد موعد", input.reason, taskId);
     commit(next);
   }, [data, currentUser, commit, log, notify]);
 
@@ -367,6 +385,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     const next = structuredClone(data);
     const ext = next.extensions.find((e) => e.id === extId);
     if (!ext) return;
+    if (ext.status !== "pending") return;
     const task = next.tasks.find((candidate) => candidate.id === ext.taskId);
     if (!task || !canReviewTask(currentUser, task, next.users)) return;
     ext.status = decision;

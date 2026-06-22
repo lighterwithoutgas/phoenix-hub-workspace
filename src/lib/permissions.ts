@@ -100,9 +100,9 @@ export function canWorkOnTask(user: User, task: Task, users: User[] = []): boole
 // Reviewers cannot approve their own work unless elevated.
 export function canReviewTask(user: User, task: Task, users: User[] = []): boolean {
   if (user.role === "viewer" || user.role === "member") return false;
+  if (isElevated(user)) return true;
   const isDoingWork = task.assignedUserIds.includes(user.id) || task.responsibleMemberIds.includes(user.id);
   if (isDoingWork) return false;
-  if (isElevated(user)) return true;
   if (user.role === "team_leader") {
     return task.reviewerIds.includes(user.id) || taskTouchesLedTeam(user, task, users);
   }

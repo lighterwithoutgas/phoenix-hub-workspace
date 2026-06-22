@@ -484,9 +484,23 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     if (!currentUser || !can(currentUser, "invite_members")) return;
     const next = structuredClone(data);
     const inv = next.invitations.find((i) => i.id === invId);
-    next.invitations = next.invitations.map((i) => (i.id === invId ? { ...i, status: "cancelled" as const } : i));
-    // remove the placeholder "invited" user record if it matches
-    if (inv) next.users = next.users.filter((u) => !(u.email === inv.email && u.accountStatus === "invited"));
+    if (!inv) return;
+
+    const invitedUserIds = next.users
+      .filter((user) => user.email === inv.email && user.accountStatus === "invited")
+      .map((user) => user.id);
+    next.invitations = next.invitations.filter((invitation) => invitation.id !== invId);
+    next.users = next.users.filter((user) => !invitedUserIds.includes(user.id));
+    next.teams = next.teams.map((team) => ({
+      ...team,
+      memberIds: team.memberIds.filter((memberId) => !invitedUserIds.includes(memberId)),
+      leaderIds: team.leaderIds.filter((leaderId) => !invitedUserIds.includes(leaderId)),
+      updatedAt:
+        team.memberIds.some((memberId) => invitedUserIds.includes(memberId)) ||
+        team.leaderIds.some((leaderId) => invitedUserIds.includes(leaderId))
+          ? nowIso()
+          : team.updatedAt,
+    }));
     commit(next);
   }, [data, commit, currentUser]);
 

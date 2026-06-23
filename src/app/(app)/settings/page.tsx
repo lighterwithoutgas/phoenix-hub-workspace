@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Bell, Globe, LogOut, ShieldCheck, UserCircle, CheckCircle2, Plus, X } from "lucide-react";
+import { Bell, Briefcase, FileText, Globe, Link2, LogOut, MapPin, Phone, ShieldCheck, UserCircle, CheckCircle2, Plus, X } from "lucide-react";
 import { useWorkspace } from "@/lib/workspace-context";
 import { Avatar, LeaderBadge, SectionTitle } from "@/components/ui";
 import { roleAr } from "@/lib/arabic";
@@ -17,6 +17,7 @@ export default function SettingsPage() {
   const isLeader = currentUser.leaderOfTeamIds.length > 0;
   const teams = currentUser.teamIds.map((id) => getTeam(data, id)?.name).filter(Boolean);
   const ledTeams = currentUser.leaderOfTeamIds.map((id) => getTeam(data, id)?.name).filter(Boolean);
+  const profile = currentUser.profile;
 
   return (
     <div className="mx-auto max-w-2xl space-y-5">
@@ -33,9 +34,55 @@ export default function SettingsPage() {
               <h2 className="text-lg font-bold text-on-surface">{currentUser.name}</h2>
               {isLeader && <LeaderBadge />}
             </div>
+            {profile?.jobTitle && (
+              <p className="flex items-center gap-1 text-sm text-on-surface-variant">
+                <Briefcase className="h-3.5 w-3.5" /> {profile.jobTitle}
+              </p>
+            )}
             <p className="meta" dir="ltr">{currentUser.email}</p>
           </div>
         </div>
+
+        {(profile?.location || profile?.phone) && (
+          <div className="mt-3 flex flex-wrap gap-4 text-sm text-on-surface-variant">
+            {profile?.location && <span className="flex items-center gap-1"><MapPin className="h-3.5 w-3.5" /> {profile.location}</span>}
+            {profile?.phone && <span className="flex items-center gap-1" dir="ltr"><Phone className="h-3.5 w-3.5" /> {profile.phone}</span>}
+          </div>
+        )}
+
+        {profile?.bio && (
+          <div className="mt-4">
+            <h3 className="mb-1 text-sm font-semibold text-on-surface">نبذة</h3>
+            <p className="whitespace-pre-line text-sm leading-relaxed text-on-surface-variant">{profile.bio}</p>
+          </div>
+        )}
+
+        {profile?.skills && profile.skills.length > 0 && (
+          <div className="mt-4">
+            <h3 className="mb-2 text-sm font-semibold text-on-surface">المهارات</h3>
+            <div className="flex flex-wrap gap-2">
+              {profile.skills.map((skill) => (
+                <span key={skill} className="badge bg-primary/10 text-primary">{skill}</span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {(profile?.cvUrl || profile?.portfolioUrl) && (
+          <div className="mt-4 flex flex-wrap gap-2">
+            {profile?.cvUrl && (
+              <a href={profile.cvUrl} target="_blank" rel="noreferrer" className="btn-outline gap-2">
+                <FileText className="h-4 w-4" /> السيرة الذاتية
+              </a>
+            )}
+            {profile?.portfolioUrl && (
+              <a href={profile.portfolioUrl} target="_blank" rel="noreferrer" className="btn-outline gap-2">
+                <Link2 className="h-4 w-4" /> الأعمال
+              </a>
+            )}
+          </div>
+        )}
+
         <dl className="mt-4 space-y-2 text-sm">
           <div className="flex justify-between border-b border-outline-variant/40 pb-2">
             <dt className="text-on-surface-variant">الدور</dt>

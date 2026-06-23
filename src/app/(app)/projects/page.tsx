@@ -3,18 +3,19 @@
 import { useMemo, useState, useEffect } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { FolderKanban, Plus, X, Trash2 } from "lucide-react";
+import { FolderKanban, Plus, X, Trash2, Pencil } from "lucide-react";
 import { useWorkspace } from "@/lib/workspace-context";
 import { isElevated } from "@/lib/permissions";
 import { tasksFor, userName, getTeam } from "@/lib/selectors";
 import { ProgressBar, EmptyState, StatusBadge, PriorityBadge, ConfirmDialog } from "@/components/ui";
 import { projectStatusAr, priorityAr, fmtDate } from "@/lib/arabic";
-import type { TaskPriority } from "@/lib/types";
+import type { Project, ProjectStatus, TaskPriority } from "@/lib/types";
 
 export default function ProjectsPage() {
-  const { currentUser, data, createProject, deleteProject } = useWorkspace();
+  const { currentUser, data, createProject, updateProject, deleteProject } = useWorkspace();
   const params = useSearchParams();
   const [showCreate, setShowCreate] = useState(false);
+  const [editProject, setEditProject] = useState<Project | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   useEffect(() => {
     if (currentUser && isElevated(currentUser) && params.get("create") === "1") setShowCreate(true);
@@ -55,6 +56,9 @@ export default function ProjectsPage() {
                       <PriorityBadge priority={p.priority} />
                     </div>
                     {isElevated(currentUser) && (
+                      <button onClick={() => setEditProject(p)} className="text-on-surface-variant transition hover:text-primary" aria-label="تعديل المشروع"><Pencil className="h-4 w-4" /></button>
+                    )}
+                    {isElevated(currentUser) && (
                       <button onClick={() => setConfirmDelete(p.id)} className="text-on-surface-variant transition hover:text-error" aria-label="حذف المشروع"><Trash2 className="h-4 w-4" /></button>
                     )}
                   </div>
@@ -88,10 +92,19 @@ export default function ProjectsPage() {
       )}
 
       {isElevated(currentUser) && showCreate && (
-        <CreateProjectDialog
+        <ProjectDialog
           teams={data.teams}
           onClose={() => setShowCreate(false)}
-          onCreate={(input) => { createProject(input); setShowCreate(false); }}
+          onSubmit={(input) => { createProject(input); setShowCreate(false); }}
+        />
+      )}
+
+      {isElevated(currentUser) && editProject && (
+        <ProjectDialog
+          teams={data.teams}
+          initial={editProject}
+          onClose={() => setEditProject(null)}
+          onSubmit={(input) => { updateProject(editProject.id, input); setEditProject(null); }}
         />
       )}
 
@@ -107,26 +120,29 @@ export default function ProjectsPage() {
   );
 }
 
-function CreateProjectDialog({
-  teams, onClose, onCreate,
+function ProjectDialog({
+  teams, initial, onClose, onSubmit,
 }: {
   teams: { id: string; name: string }[];
+  initial?: Project;
   onClose: () => void;
-  onCreate: (input: { name: string; description: string; teamIds: string[]; startDate?: string; endDate?: string; priority: TaskPriority }) => void;
+  onSubmit: (input: { name: string; description: string; teamIds: string[]; startDate?: string; endDate?: string; priority: TaskPriority; status?: ProjectStatus }) => void;
 }) {
-  const [name, setName] = useState("");
-  const [desc, setDesc] = useState("");
-  const [teamIds, setTeamIds] = useState<string[]>([]);
-  const [startDate, setStart] = useState("");
-  const [endDate, setEnd] = useState("");
-  const [priority, setPriority] = useState<TaskPriority>("medium");
+  const isEdit = !!initial;
+  const [name, setName] = useState(initial?.name ?? "");
+  const [desc, setDesc] = useState(initial?.description ?? "");
+  const [teamIds, setTeamIds] = useState<string[]>(initial?.teamIds ?? []);
+  const [startDate, setStart] = useState(initial?.startDate ? initial.startDate.slice(0, 10) : "");
+  const [endDate, setEnd] = useState(initial?.endDate ? initial.endDate.slice(0, 10) : "");
+  const [priority, setPriority] = useState<TaskPriority>(initial?.priority ?? "medium");
+  const [status, setStatus] = useState<ProjectStatus>(initial?.status ?? "planned");
   const toggle = (id: string) => setTeamIds((t) => (t.includes(id) ? t.filter((x) => x !== id) : [...t, id]));
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true">
       <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-card bg-surface-container-lowest p-5 shadow-xl">
         <div className="flex items-center justify-between">
-          <h3 className="text-lg font-bold text-on-surface">إنشاء مشروع</h3>
+          <h3 className="text-lg font-bold text-on-surface">{isEdit ? "تعديل المشروع" : "إنشاء مشروع"}</h3>
           <button onClick={onClose} className="btn-ghost p-1" aria-label="إغلاق"><X className="h-5 w-5" /></button>
         </div>
         <div className="mt-3 space-y-3">
@@ -145,14 +161,30 @@ function CreateProjectDialog({
             <div><label className="label">تاريخ البدء</label><input type="date" dir="ltr" className="input" value={startDate} onChange={(e) => setStart(e.target.value)} /></div>
             <div><label className="label">تاريخ الانتهاء</label><input type="date" dir="ltr" className="input" value={endDate} onChange={(e) => setEnd(e.target.value)} /></div>
           </div>
-          <div>
-            <label className="label">الأولوية</label>
-            <select className="input" value={priority} onChange={(e) => setPriority(e.target.value as TaskPriority)}>
-              {(["low", "medium", "high", "urgent"] as TaskPriority[]).map((p) => <option key={p} value={p}>{priorityAr[p]}</option>)}
-            </select>
+          <div className={isEdit ? "grid grid-cols-2 gap-3" : ""}>
+            <div>
+              <label className="label">الأولوية</label>
+              <select className="input" value={priority} onChange={(e) => setPriority(e.target.value as TaskPriority)}>
+                {(["low", "medium", "high", "urgent"] as TaskPriority[]).map((p) => <option key={p} value={p}>{priorityAr[p]}</option>)}
+              </select>
+            </div>
+            {isEdit && (
+              <div>
+                <label className="label">الحالة</label>
+                <select className="input" value={status} onChange={(e) => setStatus(e.target.value as ProjectStatus)}>
+                  {(["planned", "active", "paused", "completed", "cancelled"] as ProjectStatus[]).map((s) => <option key={s} value={s}>{projectStatusAr[s]}</option>)}
+                </select>
+              </div>
+            )}
           </div>
           <div className="flex justify-end gap-2 pt-1">
-            <button disabled={name.length < 2} onClick={() => onCreate({ name, description: desc, teamIds, startDate, endDate, priority })} className="btn-primary disabled:opacity-50">إنشاء</button>
+            <button
+              disabled={name.length < 2}
+              onClick={() => onSubmit({ name, description: desc, teamIds, startDate, endDate, priority, ...(isEdit ? { status } : {}) })}
+              className="btn-primary disabled:opacity-50"
+            >
+              {isEdit ? "حفظ" : "إنشاء"}
+            </button>
             <button onClick={onClose} className="btn-ghost">إلغاء</button>
           </div>
         </div>

@@ -3,27 +3,28 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
-  ChevronLeft, Play, Send, CheckCircle2, AlertTriangle, Trash2,
+  ChevronLeft, Play, Send, CheckCircle2, AlertTriangle, Trash2, Pencil, Plus,
   MessageSquare, History, ShieldAlert, CalendarClock, ListChecks, Flag, Lock, Link2, X,
 } from "lucide-react";
 import { useWorkspace } from "@/lib/workspace-context";
 import {
-  canSeeTask, canWorkOnTask, canReviewTask, canDeleteTask, isElevated,
+  canSeeTask, canWorkOnTask, canReviewTask, canDeleteTask, canEditTaskAdminFields, isElevated,
 } from "@/lib/permissions";
 import { getTeam, getUser, userName } from "@/lib/selectors";
 import {
   StatusBadge, PriorityBadge, LeaderBadge, Avatar, ProgressBar, SectionTitle, EmptyState, ConfirmDialog,
 } from "@/components/ui";
 import {
-  assignmentAr, fmtDate, fmtDateTime, fmtRelative,
+  assignmentAr, fmtDate, fmtDateTime, fmtRelative, priorityAr,
 } from "@/lib/arabic";
-import type { Blocker } from "@/lib/types";
+import type { Blocker, Task, TaskPriority, WorkspaceData } from "@/lib/types";
+import type { TaskEditPatch } from "@/lib/workspace-context";
 
 export default function TaskDetailsPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const {
-    currentUser, data, updateTaskStatus, updateProgress, toggleChecklist,
+    currentUser, data, updateTask, updateTaskStatus, updateProgress, toggleChecklist,
     addComment, reportBlocker, submitForReview, reviewTask, requestExtension,
     reviewExtension, deleteTask, deleteComment,
   } = useWorkspace();
@@ -36,6 +37,7 @@ export default function TaskDetailsPage() {
   const [showComplete, setShowComplete] = useState(false);
   const [rejectingExtensionId, setRejectingExtensionId] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
   const [localProgress, setLocalProgress] = useState(task?.progress ?? 0);
 
   useEffect(() => {
@@ -66,6 +68,7 @@ export default function TaskDetailsPage() {
 
   const canWork = canWorkOnTask(currentUser, task, data.users);
   const canReview = canReviewTask(currentUser, task, data.users);
+  const canEdit = isElevated(currentUser) || task.createdBy === currentUser.id || canEditTaskAdminFields(currentUser, task);
   const elevatedAutoApprove = task.approvalRequired && isElevated(currentUser);
   const isTeam = task.assignmentType === "team_shared";
   const team = task.assignedTeamIds[0] ? getTeam(data, task.assignedTeamIds[0]) : undefined;
@@ -80,6 +83,11 @@ export default function TaskDetailsPage() {
         <button onClick={() => router.back()} className="btn-ghost gap-1"><ChevronLeft className="h-4 w-4" /> رجوع</button>
         <div className="flex items-center gap-2">
           <span className="font-mono text-sm text-on-surface-variant" dir="ltr">{task.taskNumber}</span>
+          {canEdit && (
+            <button onClick={() => setShowEdit(true)} className="btn-ghost gap-1 px-2 text-primary hover:bg-primary/10" aria-label="تعديل المهمة">
+              <Pencil className="h-4 w-4" /> تعديل
+            </button>
+          )}
           {canDeleteTask(currentUser, task, data.users) && (
             <button onClick={() => setConfirmDelete(true)} className="btn-ghost gap-1 px-2 text-error hover:bg-error/10" aria-label="حذف المهمة">
               <Trash2 className="h-4 w-4" /> حذف
@@ -365,6 +373,145 @@ export default function TaskDetailsPage() {
         onConfirm={() => { deleteTask(task.id); router.push("/tasks"); }}
         onCancel={() => setConfirmDelete(false)}
       />
+
+      {showEdit && (
+        <TaskEditDialog
+          task={task}
+          data={data}
+          onClose={() => setShowEdit(false)}
+          onSave={(patch) => { updateTask(task.id, patch); setShowEdit(false); }}
+        />
+      )}
+    </div>
+  );
+}
+
+function TaskEditDialog({
+  task, data, onClose, onSave,
+}: {
+  task: Task;
+  data: WorkspaceData;
+  onClose: () => void;
+  onSave: (patch: TaskEditPatch) => void;
+}) {
+  const [title, setTitle] = useState(task.title);
+  const [description, setDescription] = useState(task.description);
+  const [priority, setPriority] = useState<TaskPriority>(task.priority);
+  const [startDate, setStart] = useState(task.startDate ? task.startDate.slice(0, 10) : "");
+  const [dueDate, setDue] = useState(task.dueDate ? task.dueDate.slice(0, 10) : "");
+  const [category, setCategory] = useState(task.category ?? "");
+  const [projectId, setProjectId] = useState(task.projectId ?? "");
+  const [approvalRequired, setApproval] = useState(task.approvalRequired);
+  const [proofRequired, setProof] = useState(task.proofRequired);
+  const [links, setLinks] = useState<string[]>(task.attachmentUrls);
+  const [linkDraft, setLinkDraft] = useState("");
+  const [linkError, setLinkError] = useState<string | null>(null);
+
+  const valid = title.trim().length >= 3 && description.trim().length >= 1 && !!dueDate;
+
+  const addLink = () => {
+    const raw = linkDraft.trim();
+    if (!raw) return;
+    const normalized = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+    try {
+      // eslint-disable-next-line no-new
+      new URL(normalized);
+    } catch {
+      setLinkError("رابط غير صالح");
+      return;
+    }
+    if (!links.includes(normalized)) setLinks([...links, normalized]);
+    setLinkDraft("");
+    setLinkError(null);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true">
+      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-card bg-surface-container-lowest p-5 shadow-xl">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-bold text-on-surface">تعديل المهمة</h3>
+          <button onClick={onClose} className="btn-ghost p-1" aria-label="إغلاق"><X className="h-5 w-5" /></button>
+        </div>
+        <div className="mt-3 space-y-3">
+          <div>
+            <label className="label">عنوان المهمة</label>
+            <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} />
+          </div>
+          <div>
+            <label className="label">الوصف</label>
+            <textarea rows={4} className="input resize-none" value={description} onChange={(e) => setDescription(e.target.value)} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label">الأولوية</label>
+              <select className="input" value={priority} onChange={(e) => setPriority(e.target.value as TaskPriority)}>
+                {(["low", "medium", "high", "urgent"] as TaskPriority[]).map((p) => <option key={p} value={p}>{priorityAr[p]}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="label">المشروع</label>
+              <select className="input" value={projectId} onChange={(e) => setProjectId(e.target.value)}>
+                <option value="">بدون مشروع</option>
+                {data.projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="label">تاريخ البدء</label>
+              <input type="date" dir="ltr" className="input" value={startDate} onChange={(e) => setStart(e.target.value)} />
+            </div>
+            <div>
+              <label className="label">تاريخ الاستحقاق</label>
+              <input type="date" dir="ltr" className="input" value={dueDate} onChange={(e) => setDue(e.target.value)} />
+            </div>
+            <div className="col-span-2">
+              <label className="label">التصنيف</label>
+              <input className="input" value={category} onChange={(e) => setCategory(e.target.value)} placeholder="مثال: محتوى" />
+            </div>
+          </div>
+          <div className="flex flex-col gap-2">
+            <label className="flex items-center gap-2 text-sm text-on-surface">
+              <input type="checkbox" className="h-4 w-4 accent-primary" checked={approvalRequired} onChange={(e) => setApproval(e.target.checked)} /> تتطلب موافقة قبل الإكمال
+            </label>
+            <label className="flex items-center gap-2 text-sm text-on-surface">
+              <input type="checkbox" className="h-4 w-4 accent-primary" checked={proofRequired} onChange={(e) => setProof(e.target.checked)} /> تتطلب إثبات إنجاز
+            </label>
+          </div>
+          <div>
+            <label className="label flex items-center gap-1.5"><Link2 className="h-4 w-4" /> روابط ومرفقات</label>
+            <div className="mt-1 flex gap-2">
+              <input
+                type="url" dir="ltr" className="input flex-1" placeholder="https://drive.google.com/..."
+                value={linkDraft}
+                onChange={(e) => { setLinkDraft(e.target.value); setLinkError(null); }}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addLink(); } }}
+              />
+              <button type="button" onClick={addLink} className="btn-outline gap-1 px-3"><Plus className="h-4 w-4" /> إضافة</button>
+            </div>
+            {linkError && <p className="mt-1 text-xs text-error">{linkError}</p>}
+            {links.length > 0 && (
+              <ul className="mt-2 space-y-1.5">
+                {links.map((url) => (
+                  <li key={url} className="flex items-center gap-2 rounded-card border border-outline-variant bg-surface-container-low p-2">
+                    <Link2 className="h-4 w-4 shrink-0 text-primary" aria-hidden />
+                    <a href={url} target="_blank" rel="noopener noreferrer" dir="ltr" className="min-w-0 flex-1 truncate text-sm text-primary hover:underline">{url}</a>
+                    <button type="button" onClick={() => setLinks(links.filter((x) => x !== url))} className="btn-ghost p-1 text-on-surface-variant hover:text-error" aria-label="إزالة الرابط"><X className="h-4 w-4" /></button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <div className="flex justify-end gap-2 pt-1">
+            <button
+              disabled={!valid}
+              onClick={() => onSave({ title, description, priority, startDate, dueDate, category, projectId, approvalRequired, proofRequired, attachmentUrls: links })}
+              className="btn-primary disabled:opacity-50"
+            >
+              حفظ
+            </button>
+            <button onClick={onClose} className="btn-ghost">إلغاء</button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

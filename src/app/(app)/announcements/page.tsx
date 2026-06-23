@@ -2,18 +2,19 @@
 
 import { useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
-import { Megaphone, Plus, X, Check, CheckCheck, Trash2 } from "lucide-react";
+import { Megaphone, Plus, X, Check, CheckCheck, Trash2, Pencil } from "lucide-react";
 import { useWorkspace } from "@/lib/workspace-context";
 import { can, canManageAnnouncement, canSeeAnnouncement, isElevated } from "@/lib/permissions";
 import { userName } from "@/lib/selectors";
 import { PriorityBadge, EmptyState, ConfirmDialog } from "@/components/ui";
 import { fmtRelative, priorityAr } from "@/lib/arabic";
-import type { TaskPriority } from "@/lib/types";
+import type { Announcement, TaskPriority } from "@/lib/types";
 
 export default function AnnouncementsPage() {
-  const { currentUser, data, createAnnouncement, acknowledgeAnnouncement, deleteAnnouncement } = useWorkspace();
+  const { currentUser, data, createAnnouncement, updateAnnouncement, acknowledgeAnnouncement, deleteAnnouncement } = useWorkspace();
   const params = useSearchParams();
   const [showCreate, setShowCreate] = useState(false);
+  const [editAnn, setEditAnn] = useState<Announcement | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   useEffect(() => { if (params.get("create") === "1") setShowCreate(true); }, [params]);
 
@@ -53,6 +54,7 @@ export default function AnnouncementsPage() {
                   </div>
                   <div className="flex items-center gap-2">
                     <PriorityBadge priority={a.priority} />
+                    {canManageAnnouncement(currentUser, a) && <button onClick={() => setEditAnn(a)} className="text-on-surface-variant transition hover:text-primary" aria-label="تعديل الإعلان"><Pencil className="h-4 w-4" /></button>}
                     {canManageAnnouncement(currentUser, a) && <button onClick={() => setConfirmDelete(a.id)} className="text-on-surface-variant transition hover:text-error" aria-label="حذف الإعلان"><Trash2 className="h-4 w-4" /></button>}
                   </div>
                 </div>
@@ -74,11 +76,21 @@ export default function AnnouncementsPage() {
       )}
 
       {canManage && showCreate && (
-        <CreateAnnouncementDialog
+        <AnnouncementDialog
           teams={audienceTeams}
           allowAll={isElevated(currentUser)}
           onClose={() => setShowCreate(false)}
-          onCreate={(input) => { createAnnouncement(input); setShowCreate(false); }}
+          onSubmit={(input) => { createAnnouncement(input); setShowCreate(false); }}
+        />
+      )}
+
+      {editAnn && canManageAnnouncement(currentUser, editAnn) && (
+        <AnnouncementDialog
+          teams={audienceTeams}
+          allowAll={isElevated(currentUser)}
+          initial={editAnn}
+          onClose={() => setEditAnn(null)}
+          onSubmit={(input) => { updateAnnouncement(editAnn.id, input); setEditAnn(null); }}
         />
       )}
 
@@ -94,20 +106,23 @@ export default function AnnouncementsPage() {
   );
 }
 
-function CreateAnnouncementDialog({
-  teams, allowAll, onClose, onCreate,
+function AnnouncementDialog({
+  teams, allowAll, initial, onClose, onSubmit,
 }: {
   teams: { id: string; name: string }[];
   allowAll: boolean;
+  initial?: Announcement;
   onClose: () => void;
-  onCreate: (input: { title: string; body: string; priority: TaskPriority; audienceType: "all" | "teams"; audienceIds: string[]; requireAck: boolean }) => void;
+  onSubmit: (input: { title: string; body: string; priority: TaskPriority; audienceType: "all" | "teams"; audienceIds: string[]; requireAck: boolean }) => void;
 }) {
-  const [title, setTitle] = useState("");
-  const [body, setBody] = useState("");
-  const [priority, setPriority] = useState<TaskPriority>("medium");
-  const [audienceType, setAudienceType] = useState<"all" | "teams">(allowAll ? "all" : "teams");
-  const [audienceIds, setAudienceIds] = useState<string[]>(allowAll ? [] : teams[0]?.id ? [teams[0].id] : []);
-  const [requireAck, setRequireAck] = useState(false);
+  const isEdit = !!initial;
+  const initialType: "all" | "teams" = initial ? (initial.audience.type === "all" ? "all" : "teams") : allowAll ? "all" : "teams";
+  const [title, setTitle] = useState(initial?.title ?? "");
+  const [body, setBody] = useState(initial?.body ?? "");
+  const [priority, setPriority] = useState<TaskPriority>(initial?.priority ?? "medium");
+  const [audienceType, setAudienceType] = useState<"all" | "teams">(initialType);
+  const [audienceIds, setAudienceIds] = useState<string[]>(initial ? initial.audience.ids : allowAll ? [] : teams[0]?.id ? [teams[0].id] : []);
+  const [requireAck, setRequireAck] = useState(initial?.requireAck ?? false);
   const canPublish = title.length >= 2 && body.length >= 1 && (audienceType === "all" || audienceIds.length > 0);
   const toggle = (id: string) => setAudienceIds((a) => (a.includes(id) ? a.filter((x) => x !== id) : [...a, id]));
 
@@ -115,7 +130,7 @@ function CreateAnnouncementDialog({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true">
       <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-card bg-surface-container-lowest p-5 shadow-xl">
         <div className="flex items-center justify-between">
-          <h3 className="text-lg font-bold text-on-surface">نشر إعلان</h3>
+          <h3 className="text-lg font-bold text-on-surface">{isEdit ? "تعديل الإعلان" : "نشر إعلان"}</h3>
           <button onClick={onClose} className="btn-ghost p-1" aria-label="إغلاق"><X className="h-5 w-5" /></button>
         </div>
         <div className="mt-3 space-y-3">
@@ -146,7 +161,7 @@ function CreateAnnouncementDialog({
           )}
           <label className="flex items-center gap-2 text-sm text-on-surface"><input type="checkbox" checked={requireAck} onChange={(e) => setRequireAck(e.target.checked)} className="h-4 w-4 accent-primary" /> يتطلب إقراراً بالاطلاع</label>
           <div className="flex justify-end gap-2 pt-1">
-            <button disabled={!canPublish} onClick={() => onCreate({ title, body, priority, audienceType, audienceIds, requireAck })} className="btn-primary disabled:opacity-50">نشر</button>
+            <button disabled={!canPublish} onClick={() => onSubmit({ title, body, priority, audienceType, audienceIds, requireAck })} className="btn-primary disabled:opacity-50">{isEdit ? "حفظ" : "نشر"}</button>
             <button onClick={onClose} className="btn-ghost">إلغاء</button>
           </div>
         </div>

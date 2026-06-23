@@ -2,8 +2,8 @@
 
 import { createContext, useContext, useEffect, useMemo, useRef, useState, useCallback } from "react";
 import type {
-  WorkspaceData, User, Task, TaskStatus, Notification, Invitation,
-  Blocker, ExtensionRequest, Team, Project, Announcement,
+  WorkspaceData, User, Task, TaskStatus, TaskPriority, Notification, Invitation,
+  Blocker, ExtensionRequest, Team, Project, ProjectStatus, Announcement,
 } from "./types";
 import type {
   TaskInput, InviteInput, ExtensionInput,
@@ -13,8 +13,22 @@ import { loadSession, saveSession } from "./session";
 import { apiLoadWorkspace, apiLogin, apiPersistWorkspace, apiSendInvitationEmail, apiSendNotificationEmails } from "./api/workspace";
 import { uid, nowIso, daysFromNow, isOverdue } from "./utils";
 import {
-  can, canDeleteTask, canManageAnnouncement, canReviewTask, canSeeAnnouncement, canSeeTask, canWorkOnTask, isElevated,
+  can, canDeleteTask, canEditTaskAdminFields, canManageAnnouncement, canReviewTask, canSeeAnnouncement, canSeeTask, canWorkOnTask, isElevated,
 } from "./permissions";
+
+export type TaskEditPatch = {
+  title?: string; description?: string; priority?: TaskPriority;
+  startDate?: string; dueDate?: string; category?: string; projectId?: string;
+  approvalRequired?: boolean; proofRequired?: boolean; attachmentUrls?: string[];
+};
+export type AnnouncementEditPatch = {
+  title?: string; body?: string; priority?: TaskPriority;
+  audienceType?: "all" | "teams"; audienceIds?: string[]; requireAck?: boolean;
+};
+export type ProjectEditPatch = {
+  name?: string; description?: string; teamIds?: string[]; managerId?: string;
+  startDate?: string; endDate?: string; priority?: TaskPriority; status?: ProjectStatus;
+};
 
 interface Ctx {
   ready: boolean;
@@ -24,6 +38,7 @@ interface Ctx {
   logout: () => void;
   // actions
   createTask: (input: TaskInput) => Task[] | null;
+  updateTask: (taskId: string, patch: TaskEditPatch) => void;
   updateTaskStatus: (taskId: string, status: TaskStatus, extra?: Partial<Task>) => void;
   updateProgress: (taskId: string, progress: number) => void;
   toggleChecklist: (taskId: string, itemId: string) => void;
@@ -47,7 +62,9 @@ interface Ctx {
   removeTeamMember: (teamId: string, userId: string) => void;
   setTeamLeadership: (teamId: string, userId: string, makeLeader: boolean) => void;
   createProject: (input: ProjectInput) => Project | null;
+  updateProject: (id: string, patch: ProjectEditPatch) => void;
   createAnnouncement: (input: AnnouncementInput) => Announcement | null;
+  updateAnnouncement: (id: string, patch: AnnouncementEditPatch) => void;
   acknowledgeAnnouncement: (id: string) => void;
   // delete / destructive
   deleteTask: (taskId: string) => void;
@@ -281,6 +298,41 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     t.updatedAt = nowIso();
     commit(next);
   }, [data, commit]);
+
+  // Edit a task's details (not its assignment). Elevated, the creator, or a leader of its team.
+  const updateTask = useCallback((taskId: string, patch: TaskEditPatch) => {
+    if (!currentUser) return;
+    const task = data.tasks.find((t) => t.id === taskId);
+    if (!task) return;
+    const allowed = isElevated(currentUser) || task.createdBy === currentUser.id || canEditTaskAdminFields(currentUser, task);
+    if (!allowed) return;
+
+    const title = patch.title?.trim();
+    if (title !== undefined && title.length < 3) return;
+    const description = patch.description?.trim();
+    if (description !== undefined && description.length < 1) return;
+    if (patch.dueDate !== undefined && !patch.dueDate) return;
+
+    const next = structuredClone(data);
+    next.tasks = next.tasks.map((t) => {
+      if (t.id !== taskId) return t;
+      return {
+        ...t,
+        title: title ?? t.title,
+        description: description ?? t.description,
+        priority: patch.priority ?? t.priority,
+        startDate: patch.startDate !== undefined ? (patch.startDate || undefined) : t.startDate,
+        dueDate: patch.dueDate ?? t.dueDate,
+        category: patch.category !== undefined ? (patch.category.trim() || undefined) : t.category,
+        projectId: patch.projectId !== undefined ? (patch.projectId || undefined) : t.projectId,
+        approvalRequired: patch.approvalRequired ?? t.approvalRequired,
+        proofRequired: patch.proofRequired ?? t.proofRequired,
+        attachmentUrls: patch.attachmentUrls ?? t.attachmentUrls,
+        updatedAt: nowIso(),
+      };
+    });
+    commit(next);
+  }, [data, currentUser, commit]);
 
   const updateTaskStatus = useCallback((taskId: string, status: TaskStatus, extra?: Partial<Task>) => {
     mutateTask(taskId, (t, next) => {
@@ -740,6 +792,32 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     return project;
   }, [data, currentUser, commit]);
 
+  const updateProject = useCallback((id: string, patch: ProjectEditPatch) => {
+    if (!currentUser || !isElevated(currentUser)) return;
+    const project = data.projects.find((p) => p.id === id);
+    if (!project) return;
+    const name = patch.name?.trim();
+    if (name !== undefined && name.length < 2) return;
+    const next = structuredClone(data);
+    next.projects = next.projects.map((p) =>
+      p.id === id
+        ? {
+            ...p,
+            name: name ?? p.name,
+            description: patch.description !== undefined ? patch.description.trim() : p.description,
+            teamIds: patch.teamIds ?? p.teamIds,
+            managerId: patch.managerId ?? p.managerId,
+            startDate: patch.startDate || p.startDate,
+            endDate: patch.endDate !== undefined ? (patch.endDate || undefined) : p.endDate,
+            priority: patch.priority ?? p.priority,
+            status: patch.status ?? p.status,
+            updatedAt: nowIso(),
+          }
+        : p
+    );
+    commit(next);
+  }, [data, currentUser, commit]);
+
   const createAnnouncement = useCallback((input: AnnouncementInput): Announcement | null => {
     if (!currentUser || !can(currentUser, "manage_announcements")) return null;
     if (currentUser.role === "team_leader") {
@@ -762,6 +840,38 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     commit(next);
     return ann;
   }, [data, currentUser, commit, notify]);
+
+  const updateAnnouncement = useCallback((id: string, patch: AnnouncementEditPatch) => {
+    if (!currentUser) return;
+    const ann = data.announcements.find((a) => a.id === id);
+    if (!ann || !canManageAnnouncement(currentUser, ann)) return;
+
+    const audienceType = patch.audienceType ?? (ann.audience.type === "projects" ? "teams" : ann.audience.type);
+    const audienceIds = patch.audienceIds ?? ann.audience.ids;
+    if (currentUser.role === "team_leader") {
+      if (audienceType !== "teams" || audienceIds.length === 0) return;
+      if (audienceIds.some((teamId) => !currentUser.leaderOfTeamIds.includes(teamId))) return;
+    }
+    const title = patch.title?.trim();
+    if (title !== undefined && title.length < 2) return;
+    const body = patch.body?.trim();
+    if (body !== undefined && body.length < 1) return;
+
+    const next = structuredClone(data);
+    next.announcements = next.announcements.map((a) =>
+      a.id === id
+        ? {
+            ...a,
+            title: title ?? a.title,
+            body: body ?? a.body,
+            priority: patch.priority ?? a.priority,
+            audience: { type: audienceType, ids: audienceType === "all" ? [] : audienceIds },
+            requireAck: patch.requireAck ?? a.requireAck,
+          }
+        : a
+    );
+    commit(next);
+  }, [data, currentUser, commit]);
 
   const acknowledgeAnnouncement = useCallback((id: string) => {
     if (!currentUser) return;
@@ -901,13 +1011,13 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo<Ctx>(() => ({
     ready, currentUser, data, login, logout,
-    createTask, updateTaskStatus, updateProgress, toggleChecklist, addComment,
+    createTask, updateTask, updateTaskStatus, updateProgress, toggleChecklist, addComment,
     reportBlocker, submitForReview, reviewTask, requestExtension, reviewExtension,
     inviteMember, resendInvitation, cancelInvitation, updateMemberRole, updateMyProfile, markRead, markAllRead,
-    createTeam, updateTeam, addTeamMembers, removeTeamMember, setTeamLeadership, createProject, createAnnouncement, acknowledgeAnnouncement,
+    createTeam, updateTeam, addTeamMembers, removeTeamMember, setTeamLeadership, createProject, updateProject, createAnnouncement, updateAnnouncement, acknowledgeAnnouncement,
     deleteTask, deleteTeam, deleteProject, deleteAnnouncement, deleteComment,
     setMemberStatus, removeMember,
-  }), [ready, currentUser, data, login, logout, createTask, updateTaskStatus, updateProgress, toggleChecklist, addComment, reportBlocker, submitForReview, reviewTask, requestExtension, reviewExtension, inviteMember, resendInvitation, cancelInvitation, updateMemberRole, updateMyProfile, markRead, markAllRead, createTeam, updateTeam, addTeamMembers, removeTeamMember, setTeamLeadership, createProject, createAnnouncement, acknowledgeAnnouncement, deleteTask, deleteTeam, deleteProject, deleteAnnouncement, deleteComment, setMemberStatus, removeMember]);
+  }), [ready, currentUser, data, login, logout, createTask, updateTask, updateTaskStatus, updateProgress, toggleChecklist, addComment, reportBlocker, submitForReview, reviewTask, requestExtension, reviewExtension, inviteMember, resendInvitation, cancelInvitation, updateMemberRole, updateMyProfile, markRead, markAllRead, createTeam, updateTeam, addTeamMembers, removeTeamMember, setTeamLeadership, createProject, updateProject, createAnnouncement, updateAnnouncement, acknowledgeAnnouncement, deleteTask, deleteTeam, deleteProject, deleteAnnouncement, deleteComment, setMemberStatus, removeMember]);
 
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;
 }

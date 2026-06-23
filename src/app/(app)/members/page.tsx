@@ -4,8 +4,9 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Ban, Briefcase, CheckCircle2, Copy, FileText, Link2, Mail, MapPin, Phone, ShieldCheck, Trash2, UserCheck, UserMinus, UserPlus, X } from "lucide-react";
+import { Ban, Briefcase, CheckCircle2, Copy, FileText, KeyRound, Link2, Mail, MapPin, Phone, RefreshCw, ShieldCheck, Trash2, UserCheck, UserMinus, UserPlus, X } from "lucide-react";
 import { useWorkspace } from "@/lib/workspace-context";
+import { apiResetMemberPassword } from "@/lib/api/workspace";
 import { can, isElevated } from "@/lib/permissions";
 import { inviteSchema, type InviteInput } from "@/lib/schemas";
 import { Avatar, ConfirmDialog, EmptyState, LeaderBadge } from "@/components/ui";
@@ -20,6 +21,7 @@ export default function MembersPage() {
   const [copied, setCopied] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
   const [profileUser, setProfileUser] = useState<User | null>(null);
+  const [resetUser, setResetUser] = useState<User | null>(null);
 
   useEffect(() => {
     if (params.get("invite") === "1") setShowInvite(true);
@@ -159,6 +161,11 @@ export default function MembersPage() {
                               <UserCheck className="h-3.5 w-3.5" /> تفعيل
                             </button>
                           )}
+                          {can(currentUser, "manage_members") && (
+                            <button onClick={() => setResetUser(user)} className="btn-ghost gap-1 px-2 py-1 text-on-surface-variant hover:bg-surface-container" title="إعادة تعيين كلمة المرور">
+                              <KeyRound className="h-3.5 w-3.5" /> كلمة المرور
+                            </button>
+                          )}
                           <button onClick={() => setConfirmRemove(user.id)} className="btn-ghost px-2 py-1 text-error hover:bg-error/10" aria-label="إزالة العضو">
                             <Trash2 className="h-3.5 w-3.5" />
                           </button>
@@ -198,6 +205,14 @@ export default function MembersPage() {
         />
       )}
 
+      {resetUser && (
+        <ResetPasswordDialog
+          user={resetUser}
+          actorId={currentUser.id}
+          onClose={() => setResetUser(null)}
+        />
+      )}
+
       {showInvite && (
         <InviteDialog
           teams={data.teams}
@@ -212,6 +227,116 @@ export default function MembersPage() {
           }}
         />
       )}
+    </div>
+  );
+}
+
+function generatePassword(): string {
+  const chars = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => chars[b % chars.length]).join("");
+}
+
+function ResetPasswordDialog({
+  user,
+  actorId,
+  onClose,
+}: {
+  user: User;
+  actorId: string;
+  onClose: () => void;
+}) {
+  const [password, setPassword] = useState(() => generatePassword());
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [done, setDone] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const submit = async () => {
+    if (password.trim().length < 8) {
+      setError("كلمة المرور يجب أن تكون 8 أحرف على الأقل.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      await apiResetMemberPassword(user.id, password.trim(), actorId);
+      setDone(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "تعذر إعادة تعيين كلمة المرور.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const copy = async () => {
+    if (typeof navigator === "undefined") return;
+    await navigator.clipboard.writeText(password.trim());
+    setCopied(true);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true">
+      <div className="w-full max-w-md rounded-card bg-surface-container-lowest p-5 shadow-xl">
+        <div className="flex items-center justify-between">
+          <h3 className="flex items-center gap-2 text-lg font-bold text-on-surface">
+            <KeyRound className="h-5 w-5 text-primary" /> إعادة تعيين كلمة المرور
+          </h3>
+          <button onClick={onClose} className="btn-ghost p-1" aria-label="إغلاق">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <p className="mt-2 text-sm text-on-surface-variant">
+          سيتم تعيين كلمة مرور جديدة لـ <strong className="text-on-surface">{user.name}</strong> <span dir="ltr">({user.email})</span>. كلمة المرور القديمة لا يمكن استرجاعها.
+        </p>
+
+        {done ? (
+          <div className="mt-4 space-y-3">
+            <div className="flex items-center gap-2 rounded-card border border-secondary/40 bg-secondary/5 px-3 py-2 text-sm text-on-surface">
+              <CheckCircle2 className="h-4 w-4 text-secondary" /> تم تعيين كلمة المرور الجديدة.
+            </div>
+            <div>
+              <label className="label">كلمة المرور الجديدة</label>
+              <div className="flex items-center gap-2">
+                <input dir="ltr" readOnly value={password} className="input font-mono" />
+                <button onClick={copy} className="btn-outline gap-1 whitespace-nowrap" title="نسخ">
+                  <Copy className="h-4 w-4" /> {copied ? "تم النسخ" : "نسخ"}
+                </button>
+              </div>
+            </div>
+            <p className="text-xs text-on-surface-variant">شاركها مع العضو عبر قناة آمنة واطلب منه تغييرها بعد تسجيل الدخول.</p>
+            <div className="flex justify-end pt-1">
+              <button onClick={onClose} className="btn-primary">تم</button>
+            </div>
+          </div>
+        ) : (
+          <div className="mt-4 space-y-3">
+            <div>
+              <label className="label">كلمة المرور الجديدة</label>
+              <div className="flex items-center gap-2">
+                <input
+                  dir="ltr"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="input font-mono"
+                />
+                <button onClick={() => setPassword(generatePassword())} className="btn-outline gap-1 whitespace-nowrap" title="توليد كلمة مرور">
+                  <RefreshCw className="h-4 w-4" /> توليد
+                </button>
+              </div>
+            </div>
+            {error && <p className="rounded-card bg-error/10 px-3 py-2 text-xs text-error">{error}</p>}
+            <div className="flex justify-end gap-2 pt-1">
+              <button disabled={busy || password.trim().length < 8} onClick={submit} className="btn-primary disabled:opacity-50">
+                {busy ? "جارٍ الحفظ..." : "تعيين كلمة المرور"}
+              </button>
+              <button onClick={onClose} className="btn-ghost">إلغاء</button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

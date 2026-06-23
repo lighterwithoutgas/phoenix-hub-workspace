@@ -166,6 +166,15 @@ export async function mongoFindUserById(id: string): Promise<User | null> {
   return user ? stripMongoId(user) : null;
 }
 
+export async function mongoSetUserPassword(userId: string, passwordHash: string): Promise<boolean> {
+  const db = await getMongoDb();
+  const result = await db.collection<User>(COLLECTIONS.users).updateOne(
+    { id: userId },
+    { $set: { passwordHash, updatedAt: new Date().toISOString() } }
+  );
+  return result.matchedCount > 0;
+}
+
 export async function mongoFindInvitationByToken(token: string): Promise<Invitation | null> {
   const db = await getMongoDb();
   const invitation = await db.collection<Invitation>(COLLECTIONS.invitations).findOne(

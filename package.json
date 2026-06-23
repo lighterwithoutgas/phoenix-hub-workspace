@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "test": "tsc --noEmit",
-    "reset:mongo:official": "tsx scripts/reset-mongo-official.ts"
+    "reset:mongo:official": "tsx scripts/reset-mongo-official.ts",
+    "reset:password": "tsx scripts/reset-member-password.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

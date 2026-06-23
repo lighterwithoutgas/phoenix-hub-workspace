@@ -53,6 +53,22 @@ export async function apiSendInvitationEmail(
   return readJson<{ ok: true; id?: string }>(response);
 }
 
+export async function apiResetMemberPassword(
+  userId: string,
+  newPassword: string,
+  actorId: string
+): Promise<void> {
+  const response = await fetch("/api/auth/reset-password", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-phoenix-user-id": actorId,
+    },
+    body: JSON.stringify({ userId, newPassword }),
+  });
+  await readJson<{ ok: true }>(response);
+}
+
 export async function apiSendNotificationEmails(
   notifications: Pick<Notification, "recipientId" | "title" | "message" | "taskId" | "type">[],
   actorId: string

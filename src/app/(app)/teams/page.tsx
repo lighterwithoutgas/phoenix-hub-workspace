@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Users2, Plus, X, ShieldCheck, CheckCircle2 } from "lucide-react";
 import { useWorkspace } from "@/lib/workspace-context";
-import { isElevated, visibleTeamIds } from "@/lib/permissions";
+import { isElevated, visibleTeamIds, teamLeaderNames } from "@/lib/permissions";
 import { membersOfTeam, tasksOfTeam, tasksFor, completionRate } from "@/lib/selectors";
 import { Avatar, LeaderBadge, EmptyState } from "@/components/ui";
 
@@ -42,14 +42,18 @@ export default function TeamsPage() {
             const tt = tasksOfTeam(visibleTasks, team.id, data.users);
             const active = tt.filter((t) => !["completed", "cancelled"].includes(t.status));
             const overdue = tt.filter((t) => t.status === "overdue");
-            const leaderName = team.leaderIds[0] ? data.users.find((u) => u.id === team.leaderIds[0])?.name : null;
+            const leaderNames = teamLeaderNames(team, data.users);
             return (
               <Link key={team.id} href={`/teams/${team.id}`} className="card card-pad phoenix-motif transition hover:border-primary/40">
                 <div className="flex items-center gap-3">
                   <div className="grid h-11 w-11 place-items-center rounded-card bg-primary/10 text-primary"><Users2 className="h-5 w-5" /></div>
                   <div className="min-w-0 flex-1">
                     <h3 className="truncate font-bold text-on-surface">{team.name}</h3>
-                    {leaderName && <p className="meta flex items-center gap-1.5">القائد: {leaderName} <LeaderBadge /></p>}
+                    {leaderNames.length > 0 && (
+                      <p className="meta flex items-center gap-1.5">
+                        {leaderNames.length > 1 ? "القادة" : "القائد"}: {leaderNames[0]}{leaderNames.length > 1 ? ` +${leaderNames.length - 1}` : ""} <LeaderBadge />
+                      </p>
+                    )}
                   </div>
                 </div>
                 <p className="mt-2 line-clamp-2 text-sm text-on-surface-variant">{team.description}</p>

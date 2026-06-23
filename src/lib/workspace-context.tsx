@@ -42,8 +42,10 @@ interface Ctx {
   markAllRead: () => void;
   // create
   createTeam: (input: TeamInput) => Team | null;
+  updateTeam: (teamId: string, input: { name: string; description?: string }) => void;
   addTeamMembers: (teamId: string, userIds: string[], asLeader?: boolean) => void;
   removeTeamMember: (teamId: string, userId: string) => void;
+  setTeamLeadership: (teamId: string, userId: string, makeLeader: boolean) => void;
   createProject: (input: ProjectInput) => Project | null;
   createAnnouncement: (input: AnnouncementInput) => Announcement | null;
   acknowledgeAnnouncement: (id: string) => void;
@@ -601,6 +603,48 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     return team;
   }, [data, currentUser, commit]);
 
+  // Rename a team / edit its description.
+  const updateTeam = useCallback((teamId: string, input: { name: string; description?: string }) => {
+    if (!currentUser) return;
+    const team = data.teams.find((t) => t.id === teamId);
+    if (!team) return;
+    const canManageTeam = isElevated(currentUser) || currentUser.leaderOfTeamIds.includes(teamId);
+    if (!canManageTeam) return;
+    const name = input.name.trim();
+    if (name.length < 2) return;
+    const next = structuredClone(data);
+    next.teams = next.teams.map((t) =>
+      t.id === teamId ? { ...t, name, description: input.description?.trim() ?? t.description, updatedAt: nowIso() } : t
+    );
+    commit(next);
+  }, [data, currentUser, commit]);
+
+  // Promote a member to team leader or demote a leader back to member.
+  const setTeamLeadership = useCallback((teamId: string, userId: string, makeLeader: boolean) => {
+    if (!currentUser || !isElevated(currentUser)) return;
+    const team = data.teams.find((t) => t.id === teamId);
+    if (!team || !team.memberIds.includes(userId)) return;
+    const next = structuredClone(data);
+    next.teams = next.teams.map((t) => {
+      if (t.id !== teamId) return t;
+      const leaderIds = makeLeader
+        ? Array.from(new Set([...t.leaderIds, userId]))
+        : t.leaderIds.filter((id) => id !== userId);
+      return { ...t, leaderIds, updatedAt: nowIso() };
+    });
+    next.users = next.users.map((u) => {
+      if (u.id !== userId) return u;
+      const leaderOfTeamIds = makeLeader
+        ? Array.from(new Set([...u.leaderOfTeamIds, teamId]))
+        : u.leaderOfTeamIds.filter((id) => id !== teamId);
+      let role = u.role;
+      if (makeLeader && u.role === "member") role = "team_leader";
+      if (!makeLeader && u.role === "team_leader" && leaderOfTeamIds.length === 0) role = "member";
+      return { ...u, leaderOfTeamIds, role, updatedAt: nowIso() };
+    });
+    commit(next);
+  }, [data, currentUser, commit]);
+
   // Add one or more existing members to a team's roster.
   const addTeamMembers = useCallback((teamId: string, userIds: string[], asLeader = false) => {
     if (!currentUser) return;
@@ -662,30 +706,22 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
           }
         : t
     );
-    next.users = next.users.map((u) =>
-      u.id === userId
-        ? {
-            ...u,
-            teamIds: u.teamIds.filter((t) => t !== teamId),
-            leaderOfTeamIds: u.leaderOfTeamIds.filter((t) => t !== teamId),
-            updatedAt: nowIso(),
-          }
-        : u
-    );
-    // unassign from this team's shared tasks; drop tasks left with no assignee
-    const orphan = new Set<string>();
-    next.tasks = next.tasks.map((t) => {
-      if (!t.assignedUserIds.includes(userId) && !t.responsibleMemberIds.includes(userId)) return t;
-      const stillInAnAssignedTeam = t.assignedTeamIds.some((tid) =>
-        next.users.find((u) => u.id === userId)?.teamIds.includes(tid)
-      );
-      if (stillInAnAssignedTeam) return t;
-      const assignedUserIds = t.assignedUserIds.filter((x) => x !== userId);
-      const responsibleMemberIds = t.responsibleMemberIds.filter((x) => x !== userId);
-      if (assignedUserIds.length === 0 && t.assignedTeamIds.length === 0 && responsibleMemberIds.length === 0) orphan.add(t.id);
-      return { ...t, assignedUserIds, responsibleMemberIds };
+    next.users = next.users.map((u) => {
+      if (u.id !== userId) return u;
+      const leaderOfTeamIds = u.leaderOfTeamIds.filter((t) => t !== teamId);
+      // demote a leader who no longer leads any team
+      const role = u.role === "team_leader" && leaderOfTeamIds.length === 0 ? ("member" as const) : u.role;
+      return {
+        ...u,
+        teamIds: u.teamIds.filter((t) => t !== teamId),
+        leaderOfTeamIds,
+        role,
+        updatedAt: nowIso(),
+      };
     });
-    next.tasks = next.tasks.filter((t) => !orphan.has(t.id));
+    // Roster change only: direct task assignments are independent of team
+    // membership and must be left intact (contrast removeMember, which deletes
+    // the whole account and cascades unassignment).
     commit(next);
   }, [data, currentUser, commit]);
 
@@ -868,10 +904,10 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     createTask, updateTaskStatus, updateProgress, toggleChecklist, addComment,
     reportBlocker, submitForReview, reviewTask, requestExtension, reviewExtension,
     inviteMember, resendInvitation, cancelInvitation, updateMemberRole, updateMyProfile, markRead, markAllRead,
-    createTeam, addTeamMembers, removeTeamMember, createProject, createAnnouncement, acknowledgeAnnouncement,
+    createTeam, updateTeam, addTeamMembers, removeTeamMember, setTeamLeadership, createProject, createAnnouncement, acknowledgeAnnouncement,
     deleteTask, deleteTeam, deleteProject, deleteAnnouncement, deleteComment,
     setMemberStatus, removeMember,
-  }), [ready, currentUser, data, login, logout, createTask, updateTaskStatus, updateProgress, toggleChecklist, addComment, reportBlocker, submitForReview, reviewTask, requestExtension, reviewExtension, inviteMember, resendInvitation, cancelInvitation, updateMemberRole, updateMyProfile, markRead, markAllRead, createTeam, addTeamMembers, removeTeamMember, createProject, createAnnouncement, acknowledgeAnnouncement, deleteTask, deleteTeam, deleteProject, deleteAnnouncement, deleteComment, setMemberStatus, removeMember]);
+  }), [ready, currentUser, data, login, logout, createTask, updateTaskStatus, updateProgress, toggleChecklist, addComment, reportBlocker, submitForReview, reviewTask, requestExtension, reviewExtension, inviteMember, resendInvitation, cancelInvitation, updateMemberRole, updateMyProfile, markRead, markAllRead, createTeam, updateTeam, addTeamMembers, removeTeamMember, setTeamLeadership, createProject, createAnnouncement, acknowledgeAnnouncement, deleteTask, deleteTeam, deleteProject, deleteAnnouncement, deleteComment, setMemberStatus, removeMember]);
 
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;
 }

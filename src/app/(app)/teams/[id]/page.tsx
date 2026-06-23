@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useParams, useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { Users2, ChevronLeft, Plus, ClipboardList, Trash2, UserPlus, X, Search } from "lucide-react";
+import { Users2, ChevronLeft, Plus, ClipboardList, Trash2, UserPlus, X, Search, Pencil, ShieldCheck, ShieldMinus } from "lucide-react";
 import { useWorkspace } from "@/lib/workspace-context";
 import { canSeeTeam, isElevated } from "@/lib/permissions";
 import { membersOfTeam, tasksOfTeam, tasksFor, userName, completionRate } from "@/lib/selectors";
@@ -15,7 +15,7 @@ export default function TeamDetailsPage() {
   const { id } = useParams<{ id: string }>();
   const params = useSearchParams();
   const router = useRouter();
-  const { currentUser, data, deleteTeam, addTeamMembers, removeTeamMember } = useWorkspace();
+  const { currentUser, data, deleteTeam, updateTeam, addTeamMembers, removeTeamMember, setTeamLeadership } = useWorkspace();
   const [memberFilter, setMemberFilter] = useState<string | null>(params.get("member"));
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [showAddMember, setShowAddMember] = useState(false);
@@ -23,6 +23,9 @@ export default function TeamDetailsPage() {
   const [addAsLeader, setAddAsLeader] = useState(false);
   const [search, setSearch] = useState("");
   const [removeTarget, setRemoveTarget] = useState<string | null>(null);
+  const [showEdit, setShowEdit] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editDesc, setEditDesc] = useState("");
 
   const visible = useMemo(() => (currentUser ? tasksFor(data, currentUser) : []), [data, currentUser]);
   if (!currentUser) return null;
@@ -57,6 +60,20 @@ export default function TeamDetailsPage() {
     addTeamMembers(team.id, picked, addAsLeader);
     closeAddMember();
   };
+
+  const elevated = isElevated(currentUser);
+
+  const openEdit = () => {
+    setEditName(team.name);
+    setEditDesc(team.description ?? "");
+    setShowEdit(true);
+  };
+
+  const confirmEdit = () => {
+    if (editName.trim().length < 2) return;
+    updateTeam(team.id, { name: editName, description: editDesc });
+    setShowEdit(false);
+  };
   const teamTasks = tasksOfTeam(visible, team.id, data.users);
   const sharedTasks = teamTasks.filter((t) => t.assignmentType === "team_shared");
   const memberTasks = teamTasks.filter((t) => t.assignmentType !== "team_shared");
@@ -76,6 +93,7 @@ export default function TeamDetailsPage() {
         <Link href="/teams" className="btn-ghost gap-1"><ChevronLeft className="h-4 w-4" /> كل الفرق</Link>
         <div className="flex items-center gap-2">
           {canManage && <Link href="/tasks/new?type=team_shared" className="btn-primary gap-2"><Plus className="h-4 w-4" /> إدارة مهام الفريق</Link>}
+          {canManage && <button onClick={openEdit} className="btn-outline gap-2"><Pencil className="h-4 w-4" /> تعديل</button>}
           {isElevated(currentUser) && <button onClick={() => setConfirmDelete(true)} className="btn-outline gap-2 border-error/40 text-error hover:bg-error/10"><Trash2 className="h-4 w-4" /> حذف الفريق</button>}
         </div>
       </header>
@@ -121,10 +139,20 @@ export default function TeamDetailsPage() {
                       <span className="flex items-center gap-1.5"><span className="truncate text-sm text-on-surface">{m.name}</span>{isLeader && <LeaderBadge />}</span>
                     </span>
                   </button>
+                  {elevated && (
+                    <button
+                      onClick={() => setTeamLeadership(team.id, m.id, !isLeader)}
+                      className={`grid h-7 w-7 shrink-0 place-items-center rounded-lg transition ${isLeader ? "text-primary hover:bg-primary/10" : "text-on-surface-variant/60 hover:bg-surface-container hover:text-primary"}`}
+                      aria-label={isLeader ? `إزالة ${m.name} من قيادة الفريق` : `تعيين ${m.name} قائداً للفريق`}
+                      title={isLeader ? "إزالة من القيادة" : "تعيين قائداً"}
+                    >
+                      {isLeader ? <ShieldMinus className="h-4 w-4" /> : <ShieldCheck className="h-4 w-4" />}
+                    </button>
+                  )}
                   {canManage && (
                     <button
                       onClick={() => setRemoveTarget(m.id)}
-                      className="grid h-7 w-7 shrink-0 place-items-center rounded-lg text-on-surface-variant/60 opacity-0 transition hover:bg-error/10 hover:text-error focus:opacity-100 group-hover:opacity-100"
+                      className="grid h-7 w-7 shrink-0 place-items-center rounded-lg text-on-surface-variant/60 transition hover:bg-error/10 hover:text-error"
                       aria-label={`إزالة ${m.name} من الفريق`}
                       title="إزالة من الفريق"
                     >
@@ -169,6 +197,31 @@ export default function TeamDetailsPage() {
         onConfirm={() => { if (removeTarget) removeTeamMember(team.id, removeTarget); setRemoveTarget(null); }}
         onCancel={() => setRemoveTarget(null)}
       />
+
+      {showEdit && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true">
+          <div className="w-full max-w-md rounded-card bg-surface-container-lowest p-5 shadow-xl animate-fade-in">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold text-on-surface">تعديل الفريق</h3>
+              <button onClick={() => setShowEdit(false)} className="btn-ghost p-1" aria-label="إغلاق"><X className="h-5 w-5" /></button>
+            </div>
+            <div className="mt-3 space-y-3">
+              <div>
+                <label className="label">اسم الفريق</label>
+                <input className="input" value={editName} onChange={(e) => setEditName(e.target.value)} />
+              </div>
+              <div>
+                <label className="label">الوصف</label>
+                <textarea rows={3} className="input resize-none" value={editDesc} onChange={(e) => setEditDesc(e.target.value)} />
+              </div>
+              <div className="flex justify-end gap-2 pt-1">
+                <button disabled={editName.trim().length < 2} onClick={confirmEdit} className="btn-primary disabled:opacity-50">حفظ</button>
+                <button onClick={() => setShowEdit(false)} className="btn-ghost">إلغاء</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showAddMember && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true">

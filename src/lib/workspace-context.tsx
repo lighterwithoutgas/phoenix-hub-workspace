@@ -7,7 +7,7 @@ import type {
 } from "./types";
 import type {
   TaskInput, InviteInput, ExtensionInput,
-  TeamInput, ProjectInput, AnnouncementInput,
+  TeamInput, ProjectInput, AnnouncementInput, UserProfileInput,
 } from "./schemas";
 import { loadSession, saveSession } from "./session";
 import { apiLoadWorkspace, apiLogin, apiPersistWorkspace, apiSendInvitationEmail, apiSendNotificationEmails } from "./api/workspace";
@@ -37,6 +37,7 @@ interface Ctx {
   resendInvitation: (invId: string) => void;
   cancelInvitation: (invId: string) => void;
   updateMemberRole: (userId: string, role: User["role"]) => void;
+  updateMyProfile: (profile: UserProfileInput) => void;
   markRead: (id: string) => void;
   markAllRead: () => void;
   // create
@@ -549,6 +550,32 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     commit(next);
   }, [data, commit, currentUser]);
 
+  const updateMyProfile = useCallback((profile: UserProfileInput) => {
+    if (!currentUser) return;
+    const next = structuredClone(data);
+    let updatedUser: User | null = null;
+    next.users = next.users.map((user) => {
+      if (user.id !== currentUser.id) return user;
+      updatedUser = {
+        ...user,
+        profile: {
+          jobTitle: profile.jobTitle,
+          phone: profile.phone,
+          location: profile.location,
+          bio: profile.bio,
+          skills: profile.skills,
+          cvUrl: profile.cvUrl,
+          portfolioUrl: profile.portfolioUrl,
+        },
+        updatedAt: nowIso(),
+      };
+      return updatedUser;
+    });
+    if (!updatedUser) return;
+    setCurrentUser(updatedUser);
+    commit(next);
+  }, [data, commit, currentUser]);
+
   // -- Create --------------------------------------------------------------
   const createTeam = useCallback((input: TeamInput): Team | null => {
     if (!currentUser || !isElevated(currentUser)) return null;
@@ -750,11 +777,11 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     ready, currentUser, data, login, logout,
     createTask, updateTaskStatus, updateProgress, toggleChecklist, addComment,
     reportBlocker, submitForReview, reviewTask, requestExtension, reviewExtension,
-    inviteMember, resendInvitation, cancelInvitation, updateMemberRole, markRead, markAllRead,
+    inviteMember, resendInvitation, cancelInvitation, updateMemberRole, updateMyProfile, markRead, markAllRead,
     createTeam, createProject, createAnnouncement, acknowledgeAnnouncement,
     deleteTask, deleteTeam, deleteProject, deleteAnnouncement, deleteComment,
     setMemberStatus, removeMember,
-  }), [ready, currentUser, data, login, logout, createTask, updateTaskStatus, updateProgress, toggleChecklist, addComment, reportBlocker, submitForReview, reviewTask, requestExtension, reviewExtension, inviteMember, resendInvitation, cancelInvitation, updateMemberRole, markRead, markAllRead, createTeam, createProject, createAnnouncement, acknowledgeAnnouncement, deleteTask, deleteTeam, deleteProject, deleteAnnouncement, deleteComment, setMemberStatus, removeMember]);
+  }), [ready, currentUser, data, login, logout, createTask, updateTaskStatus, updateProgress, toggleChecklist, addComment, reportBlocker, submitForReview, reviewTask, requestExtension, reviewExtension, inviteMember, resendInvitation, cancelInvitation, updateMemberRole, updateMyProfile, markRead, markAllRead, createTeam, createProject, createAnnouncement, acknowledgeAnnouncement, deleteTask, deleteTeam, deleteProject, deleteAnnouncement, deleteComment, setMemberStatus, removeMember]);
 
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;
 }

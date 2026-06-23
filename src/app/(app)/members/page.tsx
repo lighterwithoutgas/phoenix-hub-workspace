@@ -4,13 +4,13 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Ban, CheckCircle2, Copy, Mail, ShieldCheck, Trash2, UserCheck, UserMinus, UserPlus, X } from "lucide-react";
+import { Ban, Briefcase, CheckCircle2, Copy, FileText, Link2, Mail, MapPin, Phone, ShieldCheck, Trash2, UserCheck, UserMinus, UserPlus, X } from "lucide-react";
 import { useWorkspace } from "@/lib/workspace-context";
 import { can, isElevated } from "@/lib/permissions";
 import { inviteSchema, type InviteInput } from "@/lib/schemas";
 import { Avatar, ConfirmDialog, EmptyState, LeaderBadge } from "@/components/ui";
 import { accountStatusAr, fmtRelative, invitationAr, roleAr } from "@/lib/arabic";
-import type { UserRole } from "@/lib/types";
+import type { User, UserRole } from "@/lib/types";
 
 export default function MembersPage() {
   const { currentUser, data, inviteMember, resendInvitation, setMemberStatus, removeMember, cancelInvitation, updateMemberRole } = useWorkspace();
@@ -19,6 +19,7 @@ export default function MembersPage() {
   const [sent, setSent] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
+  const [profileUser, setProfileUser] = useState<User | null>(null);
 
   useEffect(() => {
     if (params.get("invite") === "1") setShowInvite(true);
@@ -88,13 +89,18 @@ export default function MembersPage() {
                 return (
                   <tr key={user.id} className="hover:bg-surface-container-low/50">
                     <td className="p-3">
-                      <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setProfileUser(user)}
+                        className="flex items-center gap-2 rounded-card text-right transition hover:opacity-80"
+                        title="عرض الملف الشخصي"
+                      >
                         <Avatar name={user.name} size={32} />
                         <div>
-                          <p className="font-medium text-on-surface">{user.name}</p>
+                          <p className="font-medium text-on-surface underline-offset-4 hover:underline">{user.name}</p>
                           <p className="meta" dir="ltr">{user.email}</p>
                         </div>
-                      </div>
+                      </button>
                     </td>
                     <td className="p-3">
                       <div className="flex items-center gap-2">
@@ -184,6 +190,14 @@ export default function MembersPage() {
         );
       })()}
 
+      {profileUser && (
+        <MemberProfileDialog
+          user={profileUser}
+          teamNames={profileUser.teamIds.map(teamName)}
+          onClose={() => setProfileUser(null)}
+        />
+      )}
+
       {showInvite && (
         <InviteDialog
           teams={data.teams}
@@ -198,6 +212,111 @@ export default function MembersPage() {
           }}
         />
       )}
+    </div>
+  );
+}
+
+function MemberProfileDialog({
+  user,
+  teamNames,
+  onClose,
+}: {
+  user: User;
+  teamNames: string[];
+  onClose: () => void;
+}) {
+  const profile = user.profile;
+  const isLeader = user.leaderOfTeamIds.length > 0;
+  const hasProfileDetails = !!(
+    profile?.jobTitle || profile?.location || profile?.phone || profile?.bio ||
+    (profile?.skills && profile.skills.length) || profile?.cvUrl || profile?.portfolioUrl
+  );
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true">
+      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-card bg-surface-container-lowest p-5 shadow-xl">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <Avatar name={user.name} size={56} />
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-lg font-bold text-on-surface">{user.name}</h3>
+                {isLeader && <LeaderBadge />}
+              </div>
+              {profile?.jobTitle && (
+                <p className="flex items-center gap-1 text-sm text-on-surface-variant">
+                  <Briefcase className="h-3.5 w-3.5" /> {profile.jobTitle}
+                </p>
+              )}
+              <p className="meta" dir="ltr">{user.email}</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="btn-ghost p-1" aria-label="إغلاق">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <dl className="mt-4 grid gap-2 text-sm sm:grid-cols-2">
+          <div className="flex justify-between gap-2 rounded-lg bg-surface-container-low px-3 py-2">
+            <dt className="text-on-surface-variant">الدور</dt>
+            <dd className="font-medium text-on-surface">{roleAr[user.role]}</dd>
+          </div>
+          <div className="flex justify-between gap-2 rounded-lg bg-surface-container-low px-3 py-2">
+            <dt className="text-on-surface-variant">الحالة</dt>
+            <dd className="font-medium text-on-surface">{accountStatusAr[user.accountStatus]}</dd>
+          </div>
+          <div className="flex justify-between gap-2 rounded-lg bg-surface-container-low px-3 py-2 sm:col-span-2">
+            <dt className="text-on-surface-variant">الفرق</dt>
+            <dd className="font-medium text-on-surface">{teamNames.join("، ") || "-"}</dd>
+          </div>
+        </dl>
+
+        {(profile?.location || profile?.phone) && (
+          <div className="mt-3 flex flex-wrap gap-4 text-sm text-on-surface-variant">
+            {profile?.location && <span className="flex items-center gap-1"><MapPin className="h-3.5 w-3.5" /> {profile.location}</span>}
+            {profile?.phone && <span className="flex items-center gap-1" dir="ltr"><Phone className="h-3.5 w-3.5" /> {profile.phone}</span>}
+          </div>
+        )}
+
+        {profile?.bio && (
+          <div className="mt-4">
+            <h4 className="mb-1 text-sm font-semibold text-on-surface">نبذة</h4>
+            <p className="whitespace-pre-line text-sm leading-relaxed text-on-surface-variant">{profile.bio}</p>
+          </div>
+        )}
+
+        {profile?.skills && profile.skills.length > 0 && (
+          <div className="mt-4">
+            <h4 className="mb-2 text-sm font-semibold text-on-surface">المهارات</h4>
+            <div className="flex flex-wrap gap-2">
+              {profile.skills.map((skill) => (
+                <span key={skill} className="badge bg-primary/10 text-primary">{skill}</span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {(profile?.cvUrl || profile?.portfolioUrl) && (
+          <div className="mt-4 flex flex-wrap gap-2">
+            {profile?.cvUrl && (
+              <a href={profile.cvUrl} target="_blank" rel="noreferrer" className="btn-outline gap-2">
+                <FileText className="h-4 w-4" /> السيرة الذاتية
+              </a>
+            )}
+            {profile?.portfolioUrl && (
+              <a href={profile.portfolioUrl} target="_blank" rel="noreferrer" className="btn-outline gap-2">
+                <Link2 className="h-4 w-4" /> الأعمال
+              </a>
+            )}
+          </div>
+        )}
+
+        {!hasProfileDetails && (
+          <p className="mt-4 rounded-card border border-dashed border-outline-variant bg-surface-lowest px-3 py-4 text-center text-sm text-on-surface-variant">
+            لم يكمل هذا العضو ملفه الشخصي بعد.
+          </p>
+        )}
+      </div>
     </div>
   );
 }

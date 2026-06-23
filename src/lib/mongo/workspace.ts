@@ -200,6 +200,7 @@ export async function mongoAcceptInvitation(token: string, passwordHash: string)
     id: existingUser?.id ?? `u_${randomUUID().replaceAll("-", "").slice(0, 12)}`,
     name: existingUser?.name ?? invitation.name,
     email: invitation.email.toLowerCase().trim(),
+    profile: existingUser?.profile,
     role: invitation.role,
     teamIds: invitation.teamIds,
     leaderOfTeamIds: invitation.leaderOfTeamIds,

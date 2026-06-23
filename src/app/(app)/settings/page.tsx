@@ -1,10 +1,14 @@
 "use client";
 
-import { Bell, Globe, LogOut, ShieldCheck } from "lucide-react";
+import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Bell, Globe, LogOut, ShieldCheck, UserCircle, CheckCircle2, Plus, X } from "lucide-react";
 import { useWorkspace } from "@/lib/workspace-context";
 import { Avatar, LeaderBadge, SectionTitle } from "@/components/ui";
 import { roleAr } from "@/lib/arabic";
 import { getTeam } from "@/lib/selectors";
+import { userProfileSchema, type UserProfileInput } from "@/lib/schemas";
 
 export default function SettingsPage() {
   const { currentUser, data, logout } = useWorkspace();
@@ -50,6 +54,8 @@ export default function SettingsPage() {
         </dl>
       </section>
 
+      <ProfileEditor />
+
       <section className="card card-pad">
         <SectionTitle><span className="flex items-center gap-2"><Bell className="h-4 w-4" /> الإشعارات</span></SectionTitle>
         <div className="space-y-2">
@@ -77,5 +83,141 @@ export default function SettingsPage() {
         </button>
       </section>
     </div>
+  );
+}
+
+function ProfileEditor() {
+  const { currentUser, updateMyProfile } = useWorkspace();
+  const [saved, setSaved] = useState(false);
+  const [skillDraft, setSkillDraft] = useState("");
+
+  const {
+    register, handleSubmit, watch, setValue, reset,
+    formState: { errors, isDirty },
+  } = useForm<UserProfileInput>({
+    resolver: zodResolver(userProfileSchema),
+    defaultValues: {
+      jobTitle: currentUser?.profile?.jobTitle ?? "",
+      phone: currentUser?.profile?.phone ?? "",
+      location: currentUser?.profile?.location ?? "",
+      bio: currentUser?.profile?.bio ?? "",
+      skills: currentUser?.profile?.skills ?? [],
+      cvUrl: currentUser?.profile?.cvUrl ?? "",
+      portfolioUrl: currentUser?.profile?.portfolioUrl ?? "",
+    },
+  });
+
+  const skills = watch("skills") ?? [];
+
+  const addSkill = () => {
+    const value = skillDraft.trim();
+    if (!value || skills.includes(value) || skills.length >= 30) {
+      setSkillDraft("");
+      return;
+    }
+    setValue("skills", [...skills, value], { shouldDirty: true });
+    setSkillDraft("");
+  };
+
+  const removeSkill = (skill: string) => {
+    setValue("skills", skills.filter((item) => item !== skill), { shouldDirty: true });
+  };
+
+  return (
+    <section className="card card-pad">
+      <SectionTitle><span className="flex items-center gap-2"><UserCircle className="h-4 w-4" /> ملفي الشخصي</span></SectionTitle>
+      <p className="meta -mt-2 mb-3">عرّف بنفسك للفريق: مسماك الوظيفي، مهاراتك، ورابط سيرتك الذاتية.</p>
+
+      {saved && (
+        <div className="mb-3 flex items-center gap-2 rounded-card border border-secondary/40 bg-secondary/5 px-3 py-2 text-sm text-on-surface">
+          <CheckCircle2 className="h-4 w-4 text-secondary" /> تم حفظ ملفك الشخصي.
+        </div>
+      )}
+
+      <form
+        onSubmit={handleSubmit((input) => {
+          updateMyProfile(input);
+          reset(input);
+          setSaved(true);
+          window.setTimeout(() => setSaved(false), 3000);
+        })}
+        className="space-y-3"
+      >
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <label className="label">المسمى الوظيفي</label>
+            <input className="input" placeholder="مثال: مهندس واجهات أمامية" {...register("jobTitle")} />
+            {errors.jobTitle && <p className="mt-1 text-xs text-error">{errors.jobTitle.message}</p>}
+          </div>
+          <div>
+            <label className="label">رقم التواصل</label>
+            <input dir="ltr" className="input" placeholder="+20…" {...register("phone")} />
+            {errors.phone && <p className="mt-1 text-xs text-error">{errors.phone.message}</p>}
+          </div>
+        </div>
+
+        <div>
+          <label className="label">الموقع</label>
+          <input className="input" placeholder="المدينة، الدولة" {...register("location")} />
+          {errors.location && <p className="mt-1 text-xs text-error">{errors.location.message}</p>}
+        </div>
+
+        <div>
+          <label className="label">نبذة تعريفية</label>
+          <textarea className="input min-h-24" placeholder="اكتب نبذة مختصرة عن خبرتك واهتماماتك المهنية." {...register("bio")} />
+          {errors.bio && <p className="mt-1 text-xs text-error">{errors.bio.message}</p>}
+        </div>
+
+        <div>
+          <label className="label">المهارات</label>
+          <div className="flex gap-2">
+            <input
+              className="input"
+              value={skillDraft}
+              onChange={(event) => setSkillDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  addSkill();
+                }
+              }}
+              placeholder="أضف مهارة ثم اضغط Enter"
+            />
+            <button type="button" onClick={addSkill} className="btn-outline shrink-0 gap-1 px-3">
+              <Plus className="h-4 w-4" /> إضافة
+            </button>
+          </div>
+          {skills.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {skills.map((skill) => (
+                <span key={skill} className="badge gap-1 bg-primary/10 text-primary">
+                  {skill}
+                  <button type="button" onClick={() => removeSkill(skill)} className="hover:text-error" aria-label={`إزالة ${skill}`}>
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <label className="label">رابط السيرة الذاتية (CV)</label>
+            <input dir="ltr" className="input" placeholder="https://…" {...register("cvUrl")} />
+            {errors.cvUrl && <p className="mt-1 text-xs text-error">{errors.cvUrl.message}</p>}
+          </div>
+          <div>
+            <label className="label">رابط الأعمال (Portfolio)</label>
+            <input dir="ltr" className="input" placeholder="https://…" {...register("portfolioUrl")} />
+            {errors.portfolioUrl && <p className="mt-1 text-xs text-error">{errors.portfolioUrl.message}</p>}
+          </div>
+        </div>
+
+        <div className="flex justify-end pt-1">
+          <button type="submit" disabled={!isDirty} className="btn-primary disabled:opacity-50">حفظ الملف الشخصي</button>
+        </div>
+      </form>
+    </section>
   );
 }

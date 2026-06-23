@@ -56,6 +56,24 @@ export const inviteSchema = z.object({
 });
 export type InviteInput = z.infer<typeof inviteSchema>;
 
+const optionalUrl = z
+  .string()
+  .trim()
+  .optional()
+  .transform((value) => value || undefined)
+  .pipe(z.string().url("رابط غير صالح").optional());
+
+export const userProfileSchema = z.object({
+  jobTitle: z.string().trim().max(80, "المسمى طويل").optional().transform((value) => value || undefined),
+  phone: z.string().trim().max(40, "رقم التواصل طويل").optional().transform((value) => value || undefined),
+  location: z.string().trim().max(80, "الموقع طويل").optional().transform((value) => value || undefined),
+  bio: z.string().trim().max(600, "النبذة طويلة").optional().transform((value) => value || undefined),
+  skills: z.array(z.string().trim().min(1)).max(30).default([]),
+  cvUrl: optionalUrl,
+  portfolioUrl: optionalUrl,
+});
+export type UserProfileInput = z.infer<typeof userProfileSchema>;
+
 export const blockerSchema = z.object({
   type: z.string().min(1, "نوع العائق مطلوب"),
   description: z.string().min(1, "شرح العائق مطلوب"),

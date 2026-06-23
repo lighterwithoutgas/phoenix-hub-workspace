@@ -48,6 +48,7 @@ export interface User {
   name: string;
   email: string;
   avatarUrl?: string;
+  profile?: UserProfile;
   role: UserRole;
   teamIds: string[];
   leaderOfTeamIds: string[];
@@ -57,6 +58,16 @@ export interface User {
   lastActiveAt?: Timestamp;
   createdAt: Timestamp;
   updatedAt: Timestamp;
+}
+
+export interface UserProfile {
+  jobTitle?: string;
+  phone?: string;
+  location?: string;
+  bio?: string;
+  skills?: string[];
+  cvUrl?: string;
+  portfolioUrl?: string;
 }
 
 export interface Team {

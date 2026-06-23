@@ -145,7 +145,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <div className="flex min-h-screen flex-row-reverse">
+    <div className="flex min-h-screen">
       {/* Desktop sidebar (right) */}
       <aside
         className={cn(

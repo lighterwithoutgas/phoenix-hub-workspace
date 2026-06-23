@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useParams, useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { Users2, ChevronLeft, Plus, ClipboardList, Trash2 } from "lucide-react";
+import { Users2, ChevronLeft, Plus, ClipboardList, Trash2, UserPlus, X, Search } from "lucide-react";
 import { useWorkspace } from "@/lib/workspace-context";
 import { canSeeTeam, isElevated } from "@/lib/permissions";
 import { membersOfTeam, tasksOfTeam, tasksFor, userName, completionRate } from "@/lib/selectors";
@@ -15,9 +15,14 @@ export default function TeamDetailsPage() {
   const { id } = useParams<{ id: string }>();
   const params = useSearchParams();
   const router = useRouter();
-  const { currentUser, data, deleteTeam } = useWorkspace();
+  const { currentUser, data, deleteTeam, addTeamMembers, removeTeamMember } = useWorkspace();
   const [memberFilter, setMemberFilter] = useState<string | null>(params.get("member"));
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [showAddMember, setShowAddMember] = useState(false);
+  const [picked, setPicked] = useState<string[]>([]);
+  const [addAsLeader, setAddAsLeader] = useState(false);
+  const [search, setSearch] = useState("");
+  const [removeTarget, setRemoveTarget] = useState<string | null>(null);
 
   const visible = useMemo(() => (currentUser ? tasksFor(data, currentUser) : []), [data, currentUser]);
   if (!currentUser) return null;
@@ -30,6 +35,28 @@ export default function TeamDetailsPage() {
 
   const canManage = isElevated(currentUser) || currentUser.leaderOfTeamIds.includes(team.id);
   const members = membersOfTeam(data, team.id);
+  const candidates = data.users
+    .filter((u) => !team.memberIds.includes(u.id) && u.accountStatus !== "suspended")
+    .filter((u) => {
+      const q = search.trim().toLowerCase();
+      return !q || u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q);
+    });
+
+  const togglePicked = (id: string) =>
+    setPicked((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+
+  const closeAddMember = () => {
+    setShowAddMember(false);
+    setPicked([]);
+    setAddAsLeader(false);
+    setSearch("");
+  };
+
+  const confirmAddMembers = () => {
+    if (picked.length === 0) return;
+    addTeamMembers(team.id, picked, addAsLeader);
+    closeAddMember();
+  };
   const teamTasks = tasksOfTeam(visible, team.id, data.users);
   const sharedTasks = teamTasks.filter((t) => t.assignmentType === "team_shared");
   const memberTasks = teamTasks.filter((t) => t.assignmentType !== "team_shared");
@@ -72,7 +99,13 @@ export default function TeamDetailsPage() {
 
       <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="card card-pad">
-          <SectionTitle>أعضاء الفريق</SectionTitle>
+          <SectionTitle
+            action={canManage ? (
+              <button onClick={() => setShowAddMember(true)} className="btn-ghost gap-1 text-primary"><UserPlus className="h-4 w-4" /> إضافة عضو</button>
+            ) : undefined}
+          >
+            أعضاء الفريق
+          </SectionTitle>
           <div className="mt-2 space-y-1">
             <button onClick={() => setMemberFilter(null)} className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-right transition ${!memberFilter ? "bg-primary/5" : "hover:bg-surface-container-low"}`}>
               <span className="text-sm font-medium text-on-surface">كل الأعضاء</span>
@@ -81,12 +114,24 @@ export default function TeamDetailsPage() {
               const isLeader = team.leaderIds.includes(m.id);
               const sel = memberFilter === m.id;
               return (
-                <button key={m.id} onClick={() => setMemberFilter(m.id)} className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-right transition ${sel ? "bg-primary/5" : "hover:bg-surface-container-low"}`}>
-                  <Avatar name={m.name} size={30} />
-                  <span className="min-w-0 flex-1">
-                    <span className="flex items-center gap-1.5"><span className="truncate text-sm text-on-surface">{m.name}</span>{isLeader && <LeaderBadge />}</span>
-                  </span>
-                </button>
+                <div key={m.id} className={`group flex items-center gap-1 rounded-lg pl-1 transition ${sel ? "bg-primary/5" : "hover:bg-surface-container-low"}`}>
+                  <button onClick={() => setMemberFilter(m.id)} className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-right">
+                    <Avatar name={m.name} size={30} />
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-center gap-1.5"><span className="truncate text-sm text-on-surface">{m.name}</span>{isLeader && <LeaderBadge />}</span>
+                    </span>
+                  </button>
+                  {canManage && (
+                    <button
+                      onClick={() => setRemoveTarget(m.id)}
+                      className="grid h-7 w-7 shrink-0 place-items-center rounded-lg text-on-surface-variant/60 opacity-0 transition hover:bg-error/10 hover:text-error focus:opacity-100 group-hover:opacity-100"
+                      aria-label={`إزالة ${m.name} من الفريق`}
+                      title="إزالة من الفريق"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
               );
             })}
           </div>
@@ -115,6 +160,79 @@ export default function TeamDetailsPage() {
         onConfirm={() => { deleteTeam(team.id); router.push("/teams"); }}
         onCancel={() => setConfirmDelete(false)}
       />
+
+      <ConfirmDialog
+        open={!!removeTarget}
+        title="إزالة من الفريق"
+        message={removeTarget ? `سيتم إزالة "${userName(data, removeTarget)}" من فريق "${team.name}". يبقى الحساب موجوداً ويمكن إعادته لاحقاً.` : ""}
+        confirmLabel="نعم، أزل"
+        onConfirm={() => { if (removeTarget) removeTeamMember(team.id, removeTarget); setRemoveTarget(null); }}
+        onCancel={() => setRemoveTarget(null)}
+      />
+
+      {showAddMember && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true">
+          <div className="flex max-h-[80vh] w-full max-w-md flex-col rounded-card bg-surface-container-lowest p-5 shadow-xl animate-fade-in">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <h3 className="font-bold text-on-surface">إضافة عضو إلى {team.name}</h3>
+                <p className="meta mt-1 normal-case tracking-normal text-on-surface-variant">اختر الأعضاء لإضافتهم إلى الفريق.</p>
+              </div>
+              <button onClick={closeAddMember} className="btn-ghost p-1.5" aria-label="إغلاق"><X className="h-4 w-4" /></button>
+            </div>
+
+            <div className="relative mt-4">
+              <Search className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-on-surface-variant/60" aria-hidden />
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="ابحث بالاسم أو البريد الإلكتروني"
+                className="input w-full pr-9"
+              />
+            </div>
+
+            <div className="mt-3 min-h-0 flex-1 space-y-1 overflow-y-auto">
+              {candidates.length === 0 ? (
+                <EmptyState title="لا يوجد أعضاء لإضافتهم" hint="كل المستخدمين المتاحين أعضاء في هذا الفريق بالفعل." icon={Users2} />
+              ) : (
+                candidates.map((u) => {
+                  const sel = picked.includes(u.id);
+                  return (
+                    <button
+                      key={u.id}
+                      onClick={() => togglePicked(u.id)}
+                      className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-right transition ${sel ? "bg-primary/10 ring-1 ring-primary/30" : "hover:bg-surface-container-low"}`}
+                    >
+                      <Avatar name={u.name} size={30} />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm text-on-surface">{u.name}</span>
+                        <span className="block truncate text-xs text-on-surface-variant">{u.email}</span>
+                      </span>
+                      <span className={`grid h-5 w-5 shrink-0 place-items-center rounded border ${sel ? "border-primary bg-primary text-white" : "border-outline-variant"}`}>
+                        {sel && <Plus className="h-3 w-3 rotate-45" />}
+                      </span>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+
+            {isElevated(currentUser) && (
+              <label className="mt-3 flex items-center gap-2 text-sm text-on-surface">
+                <input type="checkbox" checked={addAsLeader} onChange={(e) => setAddAsLeader(e.target.checked)} />
+                تعيينهم كقادة للفريق
+              </label>
+            )}
+
+            <div className="mt-4 flex justify-end gap-2">
+              <button onClick={confirmAddMembers} disabled={picked.length === 0} className="btn-primary gap-1 disabled:opacity-50">
+                <UserPlus className="h-4 w-4" /> إضافة{picked.length ? ` (${picked.length})` : ""}
+              </button>
+              <button onClick={closeAddMember} className="btn-ghost">إلغاء</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

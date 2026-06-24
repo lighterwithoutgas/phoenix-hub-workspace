@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Ban, Briefcase, CheckCircle2, Copy, FileText, KeyRound, Link2, Mail, MapPin, Phone, RefreshCw, ShieldCheck, Trash2, UserCheck, UserMinus, UserPlus, X } from "lucide-react";
+import Link from "next/link";
+import { Ban, Briefcase, CheckCircle2, Copy, FileText, KeyRound, Link2, Mail, MapPin, MessageSquare, Phone, RefreshCw, ShieldCheck, Trash2, UserCheck, UserMinus, UserPlus, X } from "lucide-react";
 import { useWorkspace } from "@/lib/workspace-context";
 import { apiResetMemberPassword } from "@/lib/api/workspace";
 import { can, isElevated } from "@/lib/permissions";
@@ -152,6 +153,9 @@ export default function MembersPage() {
                         </div>
                       ) : (
                         <div className="flex items-center gap-1">
+                          <Link href={`/messages?to=${user.id}`} className="btn-ghost gap-1 px-2 py-1 text-primary hover:bg-primary/10" title="مراسلة">
+                            <MessageSquare className="h-3.5 w-3.5" /> مراسلة
+                          </Link>
                           {user.accountStatus === "active" ? (
                             <button onClick={() => setMemberStatus(user.id, "suspended")} className="btn-ghost gap-1 px-2 py-1 text-amber hover:bg-amber/10" title="تعليق الحساب">
                               <UserMinus className="h-3.5 w-3.5" /> تعليق

@@ -239,6 +239,33 @@ export interface Announcement {
   acknowledgedBy: string[];
 }
 
+// ---------------------------------------------------------------------------
+// Direct messaging (chat). Deliberately kept OUT of WorkspaceData: messages are
+// append-only and high-frequency, so they get their own collections + atomic
+// endpoints instead of riding the whole-workspace last-write-wins PUT.
+// ---------------------------------------------------------------------------
+export interface Conversation {
+  id: string;
+  participantIds: string[]; // exactly two for 1:1 DMs, sorted
+  lastMessageAt: Timestamp;
+  lastMessagePreview: string;
+  lastReadAt: Record<string, Timestamp>; // userId -> last time they opened it
+  createdAt: Timestamp;
+}
+
+export interface Message {
+  id: string;
+  conversationId: string;
+  senderId: string;
+  body: string;
+  createdAt: Timestamp;
+}
+
+// Conversation with the caller's unread count attached (list endpoint shape).
+export interface ConversationSummary extends Conversation {
+  unreadCount: number;
+}
+
 export interface WorkspaceData {
   users: User[];
   teams: Team[];

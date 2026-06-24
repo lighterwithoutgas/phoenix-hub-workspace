@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, ListChecks, ClipboardList, Users2, FolderKanban, Calendar,
   BarChart3, FileStack, Megaphone, Bell, History, Settings, Search, Plus,
-  LogOut, Menu, X, ChevronRight, HelpCircle, Home, UserCircle, Flame,
+  LogOut, Menu, X, ChevronRight, HelpCircle, Home, UserCircle, Flame, MessageSquare,
 } from "lucide-react";
 
 interface NavItem {
@@ -39,6 +39,7 @@ const NAV: NavItem[] = [
   { href: "/analytics", label: "التحليلات", icon: BarChart3, show: (r, e) => e || r === "team_leader" },
   { href: "/templates", label: "القوالب", icon: FileStack, show: (r, e) => e || r === "team_leader" },
   { href: "/announcements", label: "الإعلانات", icon: Megaphone, show: () => true },
+  { href: "/messages", label: "المحادثات", icon: MessageSquare, show: () => true },
   { href: "/notifications", label: "الإشعارات", icon: Bell, show: () => true },
   { href: "/activity", label: "سجل النشاط", icon: History, show: (r, e) => e || r === "team_leader" },
   { href: "/settings", label: "الإعدادات", icon: Settings, show: () => true },

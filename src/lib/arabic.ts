@@ -17,14 +17,17 @@ export const roleAr: Record<UserRole, string> = {
 };
 
 export const statusAr: Record<TaskStatus, string> = {
+  pending_acceptance: "بانتظار القبول",
   scheduled: "مجدولة",
   in_progress: "قيد التنفيذ",
   blocked: "متوقفة",
   awaiting_review: "بانتظار المراجعة",
   completed: "مكتملة",
   cancelled: "ملغاة",
-  overdue: "متأخرة",
 };
+
+// Delayed is a derived flag shown as its own chip, not a stored status.
+export const delayedAr = "متأخرة";
 
 export const priorityAr: Record<TaskPriority, string> = {
   low: "منخفضة",
@@ -65,13 +68,13 @@ export const accountStatusAr: Record<AccountStatus, string> = {
 };
 
 export const statusTone: Record<TaskStatus, string> = {
+  pending_acceptance: "amber",
   scheduled: "outline",
   in_progress: "secondary",
   blocked: "coral",
   awaiting_review: "amber",
   completed: "secondary",
   cancelled: "outline",
-  overdue: "error",
 };
 
 export const priorityTone: Record<TaskPriority, string> = {

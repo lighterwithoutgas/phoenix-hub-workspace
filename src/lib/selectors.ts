@@ -47,8 +47,8 @@ export function membersOfTeam(data: WorkspaceData, teamId: string): User[] {
 export type StatusKey = Task["status"];
 export function countByStatus(tasks: Task[]): Record<StatusKey, number> {
   const init: Record<StatusKey, number> = {
-    scheduled: 0, in_progress: 0, blocked: 0, awaiting_review: 0,
-    completed: 0, cancelled: 0, overdue: 0,
+    pending_acceptance: 0, scheduled: 0, in_progress: 0, blocked: 0,
+    awaiting_review: 0, completed: 0, cancelled: 0,
   };
   for (const t of tasks) init[t.status] = (init[t.status] ?? 0) + 1;
   return init;

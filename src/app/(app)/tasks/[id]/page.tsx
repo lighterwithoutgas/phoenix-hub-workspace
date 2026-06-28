@@ -11,6 +11,7 @@ import {
   canSeeTask, canWorkOnTask, canReviewTask, canDeleteTask, canEditTaskAdminFields, isElevated,
 } from "@/lib/permissions";
 import { getTeam, getUser, userName } from "@/lib/selectors";
+import { isDelayed } from "@/lib/utils";
 import {
   StatusBadge, PriorityBadge, LeaderBadge, Avatar, ProgressBar, SectionTitle, EmptyState, ConfirmDialog,
 } from "@/components/ui";
@@ -24,7 +25,7 @@ export default function TaskDetailsPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const {
-    currentUser, data, updateTask, updateTaskStatus, updateProgress, toggleChecklist,
+    currentUser, data, acceptTask, updateTask, updateTaskStatus, updateProgress, toggleChecklist,
     addComment, reportBlocker, submitForReview, reviewTask, requestExtension,
     reviewExtension, deleteTask, deleteComment,
   } = useWorkspace();
@@ -68,6 +69,8 @@ export default function TaskDetailsPage() {
 
   const canWork = canWorkOnTask(currentUser, task, data.users);
   const canReview = canReviewTask(currentUser, task, data.users);
+  const delayed = isDelayed(task);
+  const isPendingAcceptance = task.status === "pending_acceptance";
   const canEdit = isElevated(currentUser) || task.createdBy === currentUser.id || canEditTaskAdminFields(currentUser, task);
   const elevatedAutoApprove = task.approvalRequired && isElevated(currentUser);
   const isTeam = task.assignmentType === "team_shared";
@@ -107,7 +110,7 @@ export default function TaskDetailsPage() {
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <PriorityBadge priority={task.priority} />
-                <StatusBadge status={task.status} />
+                <StatusBadge status={task.status} delayed={delayed} />
               </div>
             </div>
             <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-on-surface-variant">{task.description}</p>
@@ -119,7 +122,7 @@ export default function TaskDetailsPage() {
                 <span className="font-mono text-sm text-on-surface">{localProgress}٪</span>
               </div>
               <ProgressBar value={localProgress} />
-              {canWork && (
+              {canWork && !isPendingAcceptance && (
                 <input
                   type="range" min={0} max={100} step={5} value={localProgress}
                   onChange={(e) => setLocalProgress(Number(e.target.value))}
@@ -261,7 +264,7 @@ export default function TaskDetailsPage() {
             {task.projectId && <Detail k="المشروع" v={data.projects.find((p) => p.id === task.projectId)?.name ?? "—"} />}
             <Detail k="أنشأها" v={userName(data, task.createdBy)} />
             {task.startDate && <Detail k="تاريخ البدء" v={fmtDate(task.startDate)} />}
-            <Detail k="تاريخ الاستحقاق" v={fmtDate(task.dueDate)} tone={task.status === "overdue" ? "error" : undefined} />
+            <Detail k="تاريخ الاستحقاق" v={fmtDate(task.dueDate)} tone={delayed ? "error" : undefined} />
             <Detail k="تتطلب موافقة" v={task.approvalRequired ? "نعم" : "لا"} />
             {task.proofUrl && (
               <div className="flex justify-between gap-3">
@@ -278,6 +281,12 @@ export default function TaskDetailsPage() {
           {canWork && task.status !== "completed" && task.status !== "cancelled" && (
             <div className="card card-pad space-y-2">
               <SectionTitle>الإجراءات</SectionTitle>
+              {isPendingAcceptance && (
+                <>
+                  <p className="meta">أكّد استلام هذه المهمة لبدء العمل عليها.</p>
+                  <button onClick={() => acceptTask(task.id)} className="btn-primary w-full gap-2"><CheckCircle2 className="h-4 w-4" /> قبول المهمة</button>
+                </>
+              )}
               {task.status === "scheduled" && (
                 <button onClick={() => updateTaskStatus(task.id, "in_progress")} className="btn-primary w-full gap-2"><Play className="h-4 w-4" /> بدء المهمة</button>
               )}

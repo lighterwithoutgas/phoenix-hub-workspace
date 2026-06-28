@@ -1,4 +1,5 @@
 import { clsx, type ClassValue } from "clsx";
+import type { Task } from "./types";
 
 export function cn(...inputs: ClassValue[]) {
   return clsx(inputs);
@@ -18,9 +19,21 @@ export function daysFromNow(days: number): string {
   return d.toISOString();
 }
 
-export function isOverdue(dueDateIso: string, status: string): boolean {
-  if (status === "completed" || status === "cancelled") return false;
-  return new Date(dueDateIso).getTime() < Date.now();
+// "Delayed" is a derived display fact, never a stored status. A task is delayed
+// when its due date has passed and it is still the assignee's responsibility to
+// move forward. Submitted (awaiting_review) and not-yet-accepted
+// (pending_acceptance) tasks are excluded, as are terminal statuses. Because this
+// is derived, moving the due date forward clears the label automatically.
+const DELAYED_EXCLUDED_STATUS = new Set<Task["status"]>([
+  "completed",
+  "cancelled",
+  "awaiting_review",
+  "pending_acceptance",
+]);
+
+export function isDelayed(task: Pick<Task, "status" | "dueDate">): boolean {
+  if (DELAYED_EXCLUDED_STATUS.has(task.status)) return false;
+  return new Date(task.dueDate).getTime() < Date.now();
 }
 
 export function initials(name: string): string {

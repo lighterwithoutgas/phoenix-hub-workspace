@@ -7,13 +7,13 @@ import { StatusBadge, PriorityBadge, ProgressBar, Avatar, LeaderBadge, EmptyStat
 import { assignmentAr, statusAr, fmtDate } from "@/lib/arabic";
 import { getTeam, getUser } from "@/lib/selectors";
 import { Users2, Clock } from "lucide-react";
-import { cn, isOverdue } from "@/lib/utils";
+import { cn, isDelayed } from "@/lib/utils";
 
 export function TaskCard({ task, data }: { task: Task; data: WorkspaceData }) {
   const team = task.assignedTeamIds[0] ? getTeam(data, task.assignedTeamIds[0]) : undefined;
   const leader = team?.leaderIds[0] ? getUser(data, team.leaderIds[0]) : undefined;
   const assignees = task.assignedUserIds.map((id) => getUser(data, id)).filter(Boolean);
-  const overdue = isOverdue(task.dueDate, task.status);
+  const delayed = isDelayed(task);
 
   return (
     <Link
@@ -25,7 +25,7 @@ export function TaskCard({ task, data }: { task: Task; data: WorkspaceData }) {
           <p className="meta" dir="ltr">{task.taskNumber}</p>
           <h3 className="mt-0.5 truncate font-medium text-on-surface">{task.title}</h3>
         </div>
-        <StatusBadge status={task.status} />
+        <StatusBadge status={task.status} delayed={delayed} />
       </div>
 
       <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
@@ -59,7 +59,7 @@ export function TaskCard({ task, data }: { task: Task; data: WorkspaceData }) {
         <div className="flex -space-x-2 space-x-reverse">
           {assignees.slice(0, 4).map((u) => u && <Avatar key={u.id} name={u.name} size={26} />)}
         </div>
-        <span className={cn("flex items-center gap-1 text-xs", overdue ? "text-error" : "text-on-surface-variant")}>
+        <span className={cn("flex items-center gap-1 text-xs", delayed ? "text-error" : "text-on-surface-variant")}>
           <Clock className="h-3.5 w-3.5" /> {fmtDate(task.dueDate)}
         </span>
       </div>
@@ -67,7 +67,7 @@ export function TaskCard({ task, data }: { task: Task; data: WorkspaceData }) {
   );
 }
 
-const STATUS_FILTERS = ["all", "scheduled", "in_progress", "blocked", "awaiting_review", "completed", "overdue"] as const;
+const STATUS_FILTERS = ["all", "pending_acceptance", "scheduled", "in_progress", "blocked", "awaiting_review", "completed"] as const;
 
 export function TaskList({ tasks, data }: { tasks: Task[]; data: WorkspaceData }) {
   const [status, setStatus] = useState<(typeof STATUS_FILTERS)[number]>("all");

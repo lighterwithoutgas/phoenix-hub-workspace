@@ -11,7 +11,7 @@ import type {
 } from "./schemas";
 import { loadSession, saveSession } from "./session";
 import { apiLoadWorkspace, apiLogin, apiPersistWorkspace, apiSendInvitationEmail, apiSendNotificationEmails } from "./api/workspace";
-import { uid, nowIso, daysFromNow, isOverdue } from "./utils";
+import { uid, nowIso, daysFromNow } from "./utils";
 import {
   can, canDeleteTask, canEditTaskAdminFields, canManageAnnouncement, canReviewTask, canSeeAnnouncement, canSeeTask, canWorkOnTask, isElevated,
 } from "./permissions";
@@ -38,6 +38,7 @@ interface Ctx {
   logout: () => void;
   // actions
   createTask: (input: TaskInput) => Task[] | null;
+  acceptTask: (taskId: string) => void;
   updateTask: (taskId: string, patch: TaskEditPatch) => void;
   updateTaskStatus: (taskId: string, status: TaskStatus, extra?: Partial<Task>) => void;
   updateProgress: (taskId: string, progress: number) => void;
@@ -83,11 +84,14 @@ const EMPTY_WORKSPACE: WorkspaceData = {
   invitations: [], activities: [], comments: [], notifications: [], extensions: [],
 };
 
-const markOverdue = (d: WorkspaceData): WorkspaceData => ({
+// One-time migration: older data baked "overdue" into the stored status, which
+// destroyed the real workflow state. Delay is now derived (see isDelayed), so heal
+// any legacy "overdue" task back to in_progress on load.
+const healLegacyOverdue = (d: WorkspaceData): WorkspaceData => ({
   ...d,
   tasks: d.tasks.map((t) =>
-    isOverdue(t.dueDate, t.status) && t.status !== "blocked" && t.status !== "awaiting_review"
-      ? { ...t, status: "overdue" as TaskStatus }
+    (t.status as string) === "overdue"
+      ? { ...t, status: "in_progress" as TaskStatus }
       : t
   ),
 });
@@ -142,7 +146,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     (async () => {
       if (cancelled) return;
       try {
-        const d = markOverdue(await apiLoadWorkspace());
+        const d = healLegacyOverdue(await apiLoadWorkspace());
         if (cancelled) return;
         setData(d);
         const sid = loadSession();
@@ -199,7 +203,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       setCurrentUser(u);
       saveSession(u.id);
       const fresh = await apiLoadWorkspace();
-      setData(markOverdue(fresh));
+      setData(healLegacyOverdue(fresh));
     }
     return u;
   }, []);
@@ -234,6 +238,12 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       if (!touchesOnlyLedTeams || !usersAllInLedTeams) return null;
     }
 
+    // Individually-owned tasks must be accepted by the assignee before work
+    // begins. Team-shared tasks have no single owner to accept, so they start
+    // scheduled.
+    const initialStatus: TaskStatus =
+      input.assignmentType === "team_shared" ? "scheduled" : "pending_acceptance";
+
     const makeTask = (over: Partial<Task>, idx = 0): Task => ({
       id: uid("tk"),
       taskNumber: `PHX-${String(baseNum + idx).padStart(4, "0")}`,
@@ -245,7 +255,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       responsibleMemberIds: input.responsibleMemberIds,
       projectId: input.projectId || undefined,
       category: input.category,
-      status: "scheduled",
+      status: initialStatus,
       priority: input.priority,
       progress: 0,
       startDate: input.startDate || undefined,
@@ -298,6 +308,30 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     t.updatedAt = nowIso();
     commit(next);
   }, [data, commit]);
+
+  // The assignee confirms an assigned task, or a privileged user (leader of its
+  // team / admin / owner) confirms on their behalf — works even when delayed,
+  // since the status is real (never frozen at "overdue").
+  const acceptTask = useCallback((taskId: string) => {
+    mutateTask(
+      taskId,
+      (t, next) => {
+        t.status = "scheduled";
+        log(next, taskId, "task_accepted", "pending_acceptance", "scheduled");
+        notify(
+          next,
+          [t.createdBy].filter((rid) => rid !== currentUser?.id),
+          "task_accepted", "تم قبول المهمة", t.title, taskId,
+        );
+      },
+      (t, next) => {
+        if (!currentUser || t.status !== "pending_acceptance") return false;
+        const isAssignee =
+          t.assignedUserIds.includes(currentUser.id) || t.responsibleMemberIds.includes(currentUser.id);
+        return isAssignee || isElevated(currentUser) || canReviewTask(currentUser, t, next.users);
+      },
+    );
+  }, [mutateTask, log, notify, currentUser]);
 
   // Edit a task's details (not its assignment). Elevated, the creator, or a leader of its team.
   const updateTask = useCallback((taskId: string, patch: TaskEditPatch) => {
@@ -1011,13 +1045,13 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo<Ctx>(() => ({
     ready, currentUser, data, login, logout,
-    createTask, updateTask, updateTaskStatus, updateProgress, toggleChecklist, addComment,
+    createTask, acceptTask, updateTask, updateTaskStatus, updateProgress, toggleChecklist, addComment,
     reportBlocker, submitForReview, reviewTask, requestExtension, reviewExtension,
     inviteMember, resendInvitation, cancelInvitation, updateMemberRole, updateMyProfile, markRead, markAllRead,
     createTeam, updateTeam, addTeamMembers, removeTeamMember, setTeamLeadership, createProject, updateProject, createAnnouncement, updateAnnouncement, acknowledgeAnnouncement,
     deleteTask, deleteTeam, deleteProject, deleteAnnouncement, deleteComment,
     setMemberStatus, removeMember,
-  }), [ready, currentUser, data, login, logout, createTask, updateTask, updateTaskStatus, updateProgress, toggleChecklist, addComment, reportBlocker, submitForReview, reviewTask, requestExtension, reviewExtension, inviteMember, resendInvitation, cancelInvitation, updateMemberRole, updateMyProfile, markRead, markAllRead, createTeam, updateTeam, addTeamMembers, removeTeamMember, setTeamLeadership, createProject, updateProject, createAnnouncement, updateAnnouncement, acknowledgeAnnouncement, deleteTask, deleteTeam, deleteProject, deleteAnnouncement, deleteComment, setMemberStatus, removeMember]);
+  }), [ready, currentUser, data, login, logout, createTask, acceptTask, updateTask, updateTaskStatus, updateProgress, toggleChecklist, addComment, reportBlocker, submitForReview, reviewTask, requestExtension, reviewExtension, inviteMember, resendInvitation, cancelInvitation, updateMemberRole, updateMyProfile, markRead, markAllRead, createTeam, updateTeam, addTeamMembers, removeTeamMember, setTeamLeadership, createProject, updateProject, createAnnouncement, updateAnnouncement, acknowledgeAnnouncement, deleteTask, deleteTeam, deleteProject, deleteAnnouncement, deleteComment, setMemberStatus, removeMember]);
 
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;
 }

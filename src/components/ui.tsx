@@ -1,11 +1,11 @@
 "use client";
 
 import type { TaskStatus, TaskPriority } from "@/lib/types";
-import { statusAr, priorityAr, statusTone, priorityTone, fmtNum } from "@/lib/arabic";
+import { statusAr, delayedAr, priorityAr, statusTone, priorityTone, fmtNum } from "@/lib/arabic";
 import { cn, initials, avatarColor } from "@/lib/utils";
 import {
   CalendarClock, Loader2, Ban, Eye, CheckCircle2, XCircle, AlertTriangle,
-  ChevronUp, ChevronsUp, Minus, ShieldCheck,
+  ChevronUp, ChevronsUp, Minus, ShieldCheck, Hourglass,
 } from "lucide-react";
 
 const toneClass: Record<string, string> = {
@@ -17,21 +17,31 @@ const toneClass: Record<string, string> = {
 };
 
 const statusIcon: Record<TaskStatus, React.ElementType> = {
+  pending_acceptance: Hourglass,
   scheduled: CalendarClock,
   in_progress: Loader2,
   blocked: Ban,
   awaiting_review: Eye,
   completed: CheckCircle2,
   cancelled: XCircle,
-  overdue: AlertTriangle,
 };
 
-export function StatusBadge({ status }: { status: TaskStatus }) {
+// Shows the real workflow status, plus a separate "متأخرة" chip when the task is
+// delayed — the two are independent facts, so a task can be in_progress AND late.
+export function StatusBadge({ status, delayed = false }: { status: TaskStatus; delayed?: boolean }) {
   const Icon = statusIcon[status];
   return (
-    <span className={cn("badge", toneClass[statusTone[status]])} aria-label={`الحالة: ${statusAr[status]}`}>
-      <Icon className="h-3 w-3" aria-hidden />
-      {statusAr[status]}
+    <span className="inline-flex flex-wrap items-center gap-1.5">
+      <span className={cn("badge", toneClass[statusTone[status]])} aria-label={`الحالة: ${statusAr[status]}`}>
+        <Icon className="h-3 w-3" aria-hidden />
+        {statusAr[status]}
+      </span>
+      {delayed && (
+        <span className={cn("badge", toneClass.error)} aria-label={delayedAr}>
+          <AlertTriangle className="h-3 w-3" aria-hidden />
+          {delayedAr}
+        </span>
+      )}
     </span>
   );
 }

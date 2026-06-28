@@ -7,6 +7,7 @@ import { Users2, Plus, X, ShieldCheck, CheckCircle2 } from "lucide-react";
 import { useWorkspace } from "@/lib/workspace-context";
 import { isElevated, visibleTeamIds, teamLeaderNames } from "@/lib/permissions";
 import { membersOfTeam, tasksOfTeam, tasksFor, completionRate } from "@/lib/selectors";
+import { isDelayed } from "@/lib/utils";
 import { Avatar, LeaderBadge, EmptyState } from "@/components/ui";
 
 export default function TeamsPage() {
@@ -41,7 +42,7 @@ export default function TeamsPage() {
             const members = membersOfTeam(data, team.id);
             const tt = tasksOfTeam(visibleTasks, team.id, data.users);
             const active = tt.filter((t) => !["completed", "cancelled"].includes(t.status));
-            const overdue = tt.filter((t) => t.status === "overdue");
+            const overdue = tt.filter((t) => isDelayed(t));
             const leaderNames = teamLeaderNames(team, data.users);
             return (
               <Link key={team.id} href={`/teams/${team.id}`} className="card card-pad phoenix-motif transition hover:border-primary/40">

@@ -5,6 +5,7 @@ import { BarChart3, Users2, User2, CheckCircle2, Clock, AlertTriangle } from "lu
 import { useWorkspace } from "@/lib/workspace-context";
 import { isElevated, can } from "@/lib/permissions";
 import { tasksFor, tasksOfTeam, completionRate, onTimeRate, countByStatus } from "@/lib/selectors";
+import { isDelayed } from "@/lib/utils";
 import { StatCard, SectionTitle, EmptyState } from "@/components/ui";
 import { WeeklyCompletionChart, StatusPie, WorkloadBars } from "@/components/Charts";
 import { statusAr } from "@/lib/arabic";
@@ -21,6 +22,7 @@ export default function AnalyticsPage() {
   const personal = tasks.filter((t) => t.assignmentType === "individual" || t.assignmentType === "multiple_members_shared" || t.parentAssignmentId);
   const team = tasks.filter((t) => t.assignmentType === "team_shared");
   const counts = countByStatus(tasks);
+  const delayedCount = tasks.filter((t) => isDelayed(t)).length;
 
   const teamsToShow = isElevated(currentUser) ? data.teams : data.teams.filter((t) => currentUser.leaderOfTeamIds.includes(t.id));
   const workload = teamsToShow.map((t) => ({
@@ -39,7 +41,7 @@ export default function AnalyticsPage() {
         <StatCard label="إجمالي المهام" value={tasks.length} icon={BarChart3} />
         <StatCard label="معدل الإنجاز" value={`${completionRate(tasks)}٪`} tone="secondary" icon={CheckCircle2} />
         <StatCard label="الإنجاز في الموعد" value={`${onTimeRate(tasks)}٪`} tone="secondary" icon={Clock} />
-        <StatCard label="المتأخرة" value={counts.overdue} tone="error" icon={AlertTriangle} />
+        <StatCard label="المتأخرة" value={delayedCount} tone="error" icon={AlertTriangle} />
       </section>
 
       <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">

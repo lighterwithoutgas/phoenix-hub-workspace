@@ -15,6 +15,7 @@ import {
 import { StatCard, StatusBadge, PriorityBadge, LeaderBadge, Avatar, SectionTitle, EmptyState } from "@/components/ui";
 import { WeeklyCompletionChart, StatusPie, WorkloadBars } from "@/components/Charts";
 import { fmtRelative } from "@/lib/arabic";
+import { isDelayed } from "@/lib/utils";
 import type { Task } from "@/lib/types";
 
 export default function OverviewPage() {
@@ -43,7 +44,7 @@ function TaskMiniRow({ task }: { task: Task }) {
         <p className="meta truncate">{assignee} · <span className="font-mono">{task.taskNumber}</span></p>
       </div>
       <PriorityBadge priority={task.priority} />
-      <StatusBadge status={task.status} />
+      <StatusBadge status={task.status} delayed={isDelayed(task)} />
     </Link>
   );
 }
@@ -65,7 +66,7 @@ function AdminOverview({ tasks }: { tasks: Task[] }) {
   const teamShared = tasks.filter((t) => t.assignmentType === "team_shared");
   const copies = tasks.filter((t) => t.parentAssignmentId);
   const awaiting = tasks.filter((t) => t.status === "awaiting_review");
-  const overdue = tasks.filter((t) => t.status === "overdue");
+  const overdue = tasks.filter((t) => isDelayed(t));
   const blocked = tasks.filter((t) => t.status === "blocked");
   const upcoming = active
     .filter((t) => t.dueDate)
@@ -189,7 +190,7 @@ function LeaderOverview({ tasks }: { tasks: Task[] }) {
   const teamSharedTasks = tasks.filter((t) => t.assignmentType === "team_shared" && t.assignedTeamIds.includes(ledTeamId));
   const active = tasks.filter((t) => !["completed", "cancelled"].includes(t.status));
   const awaiting = tasks.filter((t) => t.status === "awaiting_review");
-  const overdue = tasks.filter((t) => t.status === "overdue");
+  const overdue = tasks.filter((t) => isDelayed(t));
   const blocked = tasks.filter((t) => t.status === "blocked");
 
   const byMember = members.map((m) => ({
@@ -293,7 +294,7 @@ function MemberOverview({ tasks }: { tasks: Task[] }) {
   const dueWeek = mine.filter((t) => { const d = new Date(t.dueDate); return d > today && d <= week && !["completed", "cancelled"].includes(t.status); });
   const inProgress = mine.filter((t) => t.status === "in_progress");
   const blocked = mine.filter((t) => t.status === "blocked");
-  const overdue = mine.filter((t) => t.status === "overdue");
+  const overdue = mine.filter((t) => isDelayed(t));
   const awaiting = mine.filter((t) => t.status === "awaiting_review");
   const doneRecent = mine.filter((t) => t.status === "completed").slice(0, 4);
 
@@ -344,6 +345,7 @@ function MemberOverview({ tasks }: { tasks: Task[] }) {
 
 function ViewerOverview({ tasks }: { tasks: Task[] }) {
   const c = countByStatus(tasks);
+  const delayed = tasks.filter((t) => isDelayed(t)).length;
   return (
     <div className="space-y-6">
       <header>
@@ -354,7 +356,7 @@ function ViewerOverview({ tasks }: { tasks: Task[] }) {
         <StatCard label="إجمالي المهام المتاحة" value={tasks.length} icon={ClipboardList} />
         <StatCard label="مكتملة" value={c.completed} tone="secondary" icon={CheckCircle2} />
         <StatCard label="قيد التنفيذ" value={c.in_progress} icon={Activity} />
-        <StatCard label="متأخرة" value={c.overdue} tone="error" icon={AlertTriangle} />
+        <StatCard label="متأخرة" value={delayed} tone="error" icon={AlertTriangle} />
       </section>
       <div className="card card-pad">
         <SectionTitle>المهام</SectionTitle>

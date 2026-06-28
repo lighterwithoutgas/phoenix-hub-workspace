@@ -17,13 +17,13 @@ export type AssignmentType =
   | "team_member_copies";
 
 export type TaskStatus =
+  | "pending_acceptance"
   | "scheduled"
   | "in_progress"
   | "blocked"
   | "awaiting_review"
   | "completed"
-  | "cancelled"
-  | "overdue";
+  | "cancelled";
 
 export type TaskPriority = "low" | "medium" | "high" | "urgent";
 
